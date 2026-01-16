@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Sicherheitsbeleuchtung Planer – HTML</title>
-  <meta name="theme-color" content="#0b1220">
+  <meta name="theme-color" content="#0b1220" />
+
   <style>
     :root{
       --bg:#0b1220;
@@ -47,9 +48,10 @@
       color:var(--muted);
       font-size:12px;
     }
+
     main{
       display:grid;
-      grid-template-columns:280px 1fr;
+      grid-template-columns:240px 1fr; /* kleiner als vorher */
       gap:12px;
       padding:12px;
     }
@@ -61,10 +63,11 @@
       header h1{font-size:18px}
       .btn{min-height:46px}
       input[type="text"],select{min-height:46px;font-size:16px}
-      .symbol-btn{min-height:56px}
+      .symbol-btn{min-height:48px}
       .canvas-toolbar{gap:10px}
       #overlay{touch-action:none}
     }
+
     .panel{
       background:var(--panel);
       border:1px solid var(--line);
@@ -92,6 +95,7 @@
       background:var(--panel-2);
       color:var(--ink);
     }
+
     .btn{
       background:var(--accent);
       color:var(--accent-ink);
@@ -110,36 +114,36 @@
       background:var(--danger);
       color:#fff;
     }
-    .btn:disabled{
-      opacity:.5;
-      cursor:not-allowed;
-    }
+    .btn:disabled{opacity:.5;cursor:not-allowed;}
+
     .tool-grid{
       display:grid;
-      grid-template-columns:repeat(2,1fr);
+      grid-template-columns:1fr; /* kompakter */
       gap:6px;
     }
     .symbol-btn{
       border:1px solid var(--line);
       background:var(--panel-2);
-      padding:8px;
+      padding:6px 8px;
       border-radius:10px;
       color:var(--ink);
       display:flex;
       align-items:center;
       gap:8px;
       cursor:pointer;
-      min-height:48px;
+      min-height:40px; /* kleiner */
+      text-align:left;
     }
     .symbol-btn.active{
       border-color:var(--focus);
       box-shadow:0 0 0 2px #1d4ed8;
     }
     .symbol-btn svg{
-      width:28px;
-      height:28px;
+      width:22px; /* kleiner */
+      height:22px;
       flex:0 0 auto;
     }
+
     .canvas-wrap{
       background:var(--panel);
       border:1px solid var(--line);
@@ -153,6 +157,7 @@
       gap:8px;
       flex-wrap:wrap;
       margin-bottom:8px;
+      align-items:center;
     }
     .canvas-area{
       position:relative;
@@ -204,35 +209,15 @@
       display:flex;
       align-items:center;
       justify-content:center;
+      user-select:none;
     }
     .overlay-item.selected{
       outline:2px solid var(--focus);
       border-radius:6px;
     }
-    .overlay-item svg{
-      width:100%;
-      height:100%;
-    }
-    .overlay-text{
-      min-width:80px;
-      padding:4px 8px;
-      border-radius:6px;
-      background:rgba(15,23,42,0.8);
-      border:1px solid #334155;
-      color:#f8fafc;
-      font-weight:600;
-      white-space:nowrap;
-      cursor:text;
-    }
-    .status{
-      font-size:12px;
-      color:var(--muted);
-    }
-    .legend{
-      font-size:12px;
-      color:var(--muted);
-      line-height:1.4;
-    }
+    .overlay-item svg{width:100%;height:100%;}
+    .status{font-size:12px;color:var(--muted);}
+    .legend{font-size:12px;color:var(--muted);line-height:1.4;}
     kbd{
       background:#0f172a;
       border:1px solid #334155;
@@ -241,9 +226,17 @@
       font-size:12px;
       color:#e2e8f0;
     }
+    .mini{
+      font-size:11px;
+      color:var(--muted);
+      line-height:1.35;
+    }
   </style>
+
+  <!-- Hinweis: aktuell per CDN. Für echtes Offline: pdf.min.js + worker lokal einbinden. -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
 </head>
+
 <body>
   <header>
     <div>
@@ -261,32 +254,54 @@
       <h2>Plan laden</h2>
       <div class="stack">
         <label for="pdfInput">PDF-Plan hochladen</label>
-        <input id="pdfInput" type="file" accept="application/pdf">
+        <input id="pdfInput" type="file" accept="application/pdf" />
+
         <label for="projectName">Projektname</label>
-        <input id="projectName" type="text" placeholder="z. B. Werkhalle Nord">
+        <input id="projectName" type="text" placeholder="z. B. Werkhalle Nord" />
+
         <div class="status" id="projectStatus">Kein PDF geladen.</div>
       </div>
-      <hr style="border-color:var(--line);margin:12px 0">
+
+      <hr style="border-color:var(--line);margin:12px 0" />
+
       <h2>Symbole</h2>
       <div class="tool-grid" id="symbolGrid"></div>
+
       <div class="stack" style="margin-top:10px">
         <label for="symbolSize">Symbolgröße</label>
-        <input id="symbolSize" type="range" min="10" max="48" value="20">
+        <input id="symbolSize" type="range" min="10" max="48" value="20" />
+
         <label for="symbolRotate">Rotation</label>
-        <input id="symbolRotate" type="range" min="0" max="360" value="0">
-        <label for="textDefault">Text (Stromkreis)</label>
-        <input id="textDefault" type="text" value="Stromkreis A">
+        <input id="symbolRotate" type="range" min="0" max="360" value="0" />
+
+        <label for="textDefault">Standard Stromkreis</label>
+        <input id="textDefault" type="text" value="Stromkreis A" />
+
+        <hr style="border-color:var(--line);margin:10px 0" />
+
+        <label for="symbolCircuit">Stromkreis (unter Symbol)</label>
+        <input id="symbolCircuit" type="text" placeholder="z. B. Stromkreis A" />
+
+        <label for="symbolNote">Beschriftung (nur bei Auswahl sichtbar)</label>
+        <input id="symbolNote" type="text" placeholder="z. B. Leuchte über Tor 2" />
+
         <button class="btn secondary" id="btnDelete" disabled>Auswahl löschen</button>
+
+        <div class="mini">
+          Tipp: Symbol anklicken → Stromkreis/Beschriftung links eintragen. Beschriftung erscheint nur bei ausgewähltem Symbol.
+        </div>
       </div>
-      <hr style="border-color:var(--line);margin:12px 0">
+
+      <hr style="border-color:var(--line);margin:12px 0" />
+
       <h2>Hinweise</h2>
       <p class="legend">
-        1. PDF laden.<br>
-        2. Symbol anklicken und im Plan platzieren.<br>
-        3. Symbole lassen sich per Drag & Drop mit Stift/Maus verschieben.<br>
-        4. Auswahl anklicken, Größe/Rotation anpassen.<br>
-        5. Änderungen werden lokal gespeichert (Tablet-freundlich).<br>
-        Text: Doppelklick zum Bearbeiten, <kbd>Enter</kbd> beendet die Eingabe.
+        1. PDF laden.<br />
+        2. Symbol anklicken und im Plan platzieren.<br />
+        3. Symbole lassen sich per Drag & Drop mit Stift/Maus verschieben.<br />
+        4. Auswahl anklicken, Größe/Rotation + Stromkreis/Beschriftung anpassen.<br />
+        5. Änderungen werden lokal gespeichert (Tablet-freundlich).<br />
+        <span class="mini">Hinweis: Die SVG-Symbole sind vereinfachte Icons (nicht “zertifizierte” ISO-Assets).</span>
       </p>
     </section>
 
@@ -295,16 +310,20 @@
         <button class="btn" id="btnPrev">← Seite</button>
         <div class="status" id="pageStatus">Seite 0 / 0</div>
         <button class="btn" id="btnNext">Seite →</button>
+
         <label style="display:flex;align-items:center;gap:6px">
           Zoom
-          <input id="zoomRange" type="range" min="50" max="200" value="100">
+          <input id="zoomRange" type="range" min="50" max="200" value="100" />
         </label>
+
         <button class="btn secondary" id="btnResetView">Ansicht zurücksetzen</button>
         <button class="btn secondary" id="btnExport" disabled>PNG exportieren</button>
       </div>
+
       <div class="canvas-area" id="canvasArea">
         <canvas id="pdfCanvas"></canvas>
         <div id="overlay"></div>
+
         <div class="empty-state" id="emptyState">
           <div>
             <strong>Kein Plan geladen</strong>
@@ -326,18 +345,23 @@
     const emptyState = document.getElementById("emptyState");
     const emptyHintPrimary = document.getElementById("emptyHintPrimary");
     const emptyHintSecondary = document.getElementById("emptyHintSecondary");
+
     const btnPrev = document.getElementById("btnPrev");
     const btnNext = document.getElementById("btnNext");
     const zoomRange = document.getElementById("zoomRange");
     const btnResetView = document.getElementById("btnResetView");
     const btnExport = document.getElementById("btnExport");
+
     const symbolGrid = document.getElementById("symbolGrid");
     const symbolSize = document.getElementById("symbolSize");
     const symbolRotate = document.getElementById("symbolRotate");
     const textDefault = document.getElementById("textDefault");
+    const symbolCircuit = document.getElementById("symbolCircuit");
+    const symbolNote = document.getElementById("symbolNote");
     const btnDelete = document.getElementById("btnDelete");
 
-    const STORAGE_KEY = "sibe_planner_state_v1";
+    const STORAGE_KEY = "sibe_planner_state_v2"; // v2 wegen neuer Felder
+
     const state = {
       pdfData: null,
       pdfName: "",
@@ -350,6 +374,7 @@
       projectName: "",
       pdfjsReady: false,
       textDefault: "Stromkreis A",
+      pdfDoc: null,
     };
 
     const symbolDefs = [
@@ -412,11 +437,6 @@
         label: "Sicherheitsleuchte",
         kind: "svg",
         svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#f59e0b"/><path d="M16 32c0-8.8 7.2-16 16-16s16 7.2 16 16c0 6.3-3.7 11.8-9 14.3V50H25v-5.7c-5.3-2.5-9-8-9-14.3Z" fill="#fff"/><rect x="24" y="50" width="16" height="6" rx="2" fill="#fff"/></svg>`
-      },
-      {
-        id: "text-label",
-        label: "Text / Stromkreis",
-        kind: "text"
       }
     ];
 
@@ -443,6 +463,7 @@
         state.projectName = data.projectName || "";
         state.pdfName = data.pdfName || "";
         state.textDefault = data.textDefault || state.textDefault;
+
         projectName.value = state.projectName;
         textDefault.value = state.textDefault;
       } catch (error) {
@@ -464,10 +485,7 @@
         btn.type = "button";
         btn.className = "symbol-btn";
         btn.dataset.symbol = def.id;
-        const icon = def.kind === "text"
-          ? `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1e293b"/><path d="M20 18h24M32 18v28M24 46h16" stroke="#fff" stroke-width="4" stroke-linecap="round"/></svg>`
-          : def.svg;
-        btn.innerHTML = `${icon}<span>${def.label}</span>`;
+        btn.innerHTML = `${def.svg}<span>${def.label}</span>`;
         btn.addEventListener("click", () => setActiveSymbol(def.id));
         btn.addEventListener("pointerdown", () => setActiveSymbol(def.id));
         btn.setAttribute("draggable", "true");
@@ -493,58 +511,6 @@
       btnNext.disabled = state.pageNum >= state.pageCount;
       btnExport.disabled = !state.pageCount;
       emptyState.style.display = state.pageCount ? "none" : "flex";
-    }
-
-    function renderOverlay() {
-      overlay.innerHTML = "";
-      const scale = state.scale;
-      const items = state.symbols.filter(item => item.page === state.pageNum);
-      items.forEach(item => {
-        const div = document.createElement("div");
-        div.className = "overlay-item";
-        if (state.selectedId === item.id) {
-          div.classList.add("selected");
-        }
-        div.style.left = `${item.x * scale}px`;
-        div.style.top = `${item.y * scale}px`;
-        div.style.width = `${item.size * scale}px`;
-        div.style.height = `${item.size * scale}px`;
-        div.style.transform = `rotate(${item.rotation}deg)`;
-        const def = symbolDefs.find(s => s.id === item.symbol);
-        if (item.kind === "text" || def?.kind === "text") {
-          div.classList.add("overlay-text");
-          div.style.width = "auto";
-          div.style.height = "auto";
-          div.style.fontSize = `${item.size}px`;
-          div.textContent = item.text || state.textDefault;
-          div.setAttribute("contenteditable", "false");
-          div.addEventListener("dblclick", (event) => {
-            event.stopPropagation();
-            div.setAttribute("contenteditable", "true");
-            div.focus();
-          });
-          div.addEventListener("blur", () => {
-            div.setAttribute("contenteditable", "false");
-            item.text = div.textContent.trim() || state.textDefault;
-            saveState();
-          });
-          div.addEventListener("keydown", (event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              div.blur();
-            }
-          });
-        } else {
-          div.innerHTML = def ? def.svg : "";
-        }
-        div.dataset.id = item.id;
-        enableDrag(div);
-        div.addEventListener("click", (event) => {
-          event.stopPropagation();
-          selectSymbol(item.id);
-        });
-        overlay.appendChild(div);
-      });
       btnDelete.disabled = !state.selectedId;
     }
 
@@ -554,6 +520,8 @@
       if (item) {
         symbolSize.value = item.size;
         symbolRotate.value = item.rotation;
+        symbolCircuit.value = item.circuit || "";
+        symbolNote.value = item.note || "";
       }
       renderOverlay();
       saveState();
@@ -568,53 +536,142 @@
       saveState();
     }
 
+    // FIX: Drag ohne renderOverlay() im Move (sonst werden Elemente ständig neu gebaut)
     function enableDrag(element) {
       let startX = 0;
       let startY = 0;
       let originX = 0;
       let originY = 0;
+      let dragging = false;
+
       const onMove = (event) => {
+        if (!dragging) return;
         const dx = event.clientX - startX;
         const dy = event.clientY - startY;
         const scale = state.scale;
+
         const item = state.symbols.find(s => s.id === element.dataset.id);
         if (!item) return;
+
         item.x = Math.max(0, originX + dx / scale);
         item.y = Math.max(0, originY + dy / scale);
-        renderOverlay();
+
+        element.style.left = `${item.x * scale}px`;
+        element.style.top = `${item.y * scale}px`;
       };
+
       const stopMove = () => {
+        dragging = false;
         document.removeEventListener("pointermove", onMove);
-        document.removeEventListener("pointerup", stopMove);
         saveState();
+        renderOverlay(); // einmal am Ende
       };
+
       element.addEventListener("pointerdown", (event) => {
-        if (element.getAttribute("contenteditable") === "true") {
-          return;
-        }
         event.preventDefault();
         const item = state.symbols.find(s => s.id === element.dataset.id);
         if (!item) return;
+
         selectSymbol(item.id);
+
+        dragging = true;
         startX = event.clientX;
         startY = event.clientY;
         originX = item.x;
         originY = item.y;
+
         element.setPointerCapture(event.pointerId);
         document.addEventListener("pointermove", onMove);
         document.addEventListener("pointerup", stopMove, { once: true });
       });
     }
 
+    function renderOverlay() {
+      overlay.innerHTML = "";
+      const scale = state.scale;
+      const items = state.symbols.filter(item => item.page === state.pageNum);
+
+      items.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "overlay-item";
+        if (state.selectedId === item.id) div.classList.add("selected");
+
+        div.style.left = `${item.x * scale}px`;
+        div.style.top = `${item.y * scale}px`;
+        div.style.width = `${item.size * scale}px`;
+        div.style.height = `${item.size * scale}px`;
+        div.style.transform = `rotate(${item.rotation}deg)`;
+
+        const def = symbolDefs.find(s => s.id === item.symbol);
+        div.innerHTML = def ? def.svg : "";
+
+        // Stromkreis (immer sichtbar unter Symbol)
+        const circuitText = (item.circuit ?? "").trim();
+        if (circuitText) {
+          const cap = document.createElement("div");
+          cap.style.position = "absolute";
+          cap.style.left = "50%";
+          cap.style.top = "100%";
+          cap.style.transform = "translate(-50%, 6px)";
+          cap.style.fontSize = `${Math.max(10, Math.round(item.size * 0.45))}px`;
+          cap.style.color = "#e2e8f0";
+          cap.style.background = "rgba(15,23,42,.75)";
+          cap.style.border = "1px solid #334155";
+          cap.style.padding = "2px 6px";
+          cap.style.borderRadius = "6px";
+          cap.style.whiteSpace = "nowrap";
+          cap.style.pointerEvents = "none";
+          cap.textContent = circuitText;
+          div.appendChild(cap);
+        }
+
+        // Beschriftung (nur sichtbar wenn ausgewählt)
+        const noteText = (item.note ?? "").trim();
+        if (state.selectedId === item.id && noteText) {
+          const note = document.createElement("div");
+          note.style.position = "absolute";
+          note.style.left = "50%";
+          note.style.bottom = "100%";
+          note.style.transform = "translate(-50%, -8px)";
+          note.style.fontSize = "12px";
+          note.style.color = "#f8fafc";
+          note.style.background = "rgba(2,6,23,.9)";
+          note.style.border = "1px solid #475569";
+          note.style.padding = "4px 8px";
+          note.style.borderRadius = "8px";
+          note.style.whiteSpace = "nowrap";
+          note.style.pointerEvents = "none";
+          note.textContent = noteText;
+          div.appendChild(note);
+        }
+
+        div.dataset.id = item.id;
+        enableDrag(div);
+
+        div.addEventListener("click", (event) => {
+          event.stopPropagation();
+          selectSymbol(item.id);
+        });
+
+        overlay.appendChild(div);
+      });
+
+      btnDelete.disabled = !state.selectedId;
+      updateStatus();
+    }
+
     async function renderPage(pdf, pageNum) {
       const page = await pdf.getPage(pageNum);
       const viewport = page.getViewport({ scale: state.scale });
+
       pdfCanvas.width = viewport.width;
       pdfCanvas.height = viewport.height;
       overlay.style.width = `${viewport.width}px`;
       overlay.style.height = `${viewport.height}px`;
+
       const ctx = pdfCanvas.getContext("2d");
       await page.render({ canvasContext: ctx, viewport }).promise;
+
       renderOverlay();
       updateStatus();
     }
@@ -626,8 +683,10 @@
         return;
       }
       state.pdfjsReady = true;
+
       pdfjsLib.GlobalWorkerOptions.workerSrc =
         "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
       try {
         const pdf = await pdfjsLib.getDocument({ data }).promise;
         state.pageCount = pdf.numPages;
@@ -642,10 +701,12 @@
     pdfInput.addEventListener("change", async (event) => {
       const file = event.target.files[0];
       if (!file) return;
+
       state.pdfName = file.name;
       const arrayBuffer = await file.arrayBuffer();
       state.pdfData = new Uint8Array(arrayBuffer);
       state.pageNum = 1;
+
       await loadPdf(state.pdfData);
       saveState();
     });
@@ -686,13 +747,16 @@
 
     function placeSymbolAt(clientX, clientY) {
       if (!state.activeSymbol || !state.pdfDoc) return;
+
       const rect = overlay.getBoundingClientRect();
       const scale = state.scale;
       const size = Number(symbolSize.value);
       const x = (clientX - rect.left) / scale - size / 2;
       const y = (clientY - rect.top) / scale - size / 2;
+
       const id = `sym_${Date.now()}_${Math.random().toString(16).slice(2)}`;
       const def = symbolDefs.find(s => s.id === state.activeSymbol);
+
       const symbol = {
         id,
         symbol: state.activeSymbol,
@@ -702,20 +766,31 @@
         size,
         rotation: Number(symbolRotate.value),
         page: state.pageNum,
-        text: def?.kind === "text" ? state.textDefault : "",
+
+        // neu:
+        circuit: state.textDefault,
+        note: ""
       };
+
       state.symbols.push(symbol);
       selectSymbol(id);
       saveState();
     }
 
     overlay.addEventListener("click", (event) => {
-      placeSymbolAt(event.clientX, event.clientY);
+      // Klick auf freie Fläche:
+      // - wenn ein aktives Symbol gewählt ist: platzieren
+      // - sonst: Auswahl entfernen
+      if (state.activeSymbol) {
+        placeSymbolAt(event.clientX, event.clientY);
+      } else {
+        state.selectedId = null;
+        renderOverlay();
+        saveState();
+      }
     });
 
-    overlay.addEventListener("dragover", (event) => {
-      event.preventDefault();
-    });
+    overlay.addEventListener("dragover", (event) => event.preventDefault());
 
     overlay.addEventListener("drop", (event) => {
       event.preventDefault();
@@ -743,53 +818,81 @@
 
     symbolSize.addEventListener("input", updateSelectedSymbol);
     symbolRotate.addEventListener("input", updateSelectedSymbol);
+
     textDefault.addEventListener("input", () => {
       state.textDefault = textDefault.value;
       saveState();
+    });
+
+    symbolCircuit.addEventListener("input", () => {
+      const item = state.symbols.find(s => s.id === state.selectedId);
+      if (!item) return;
+      item.circuit = symbolCircuit.value;
+      saveState();
+      renderOverlay();
+    });
+
+    symbolNote.addEventListener("input", () => {
+      const item = state.symbols.find(s => s.id === state.selectedId);
+      if (!item) return;
+      item.note = symbolNote.value;
+      saveState();
+      renderOverlay();
     });
 
     function svgToImage(svgMarkup) {
       return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => resolve(img);
-        img.src = `data:image/svg+xml;base64,${btoa(svgMarkup)}`;
+        img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgMarkup)))}`;
       });
     }
 
     btnExport.addEventListener("click", async () => {
       const container = document.createElement("canvas");
-      const scale = window.devicePixelRatio || 1;
-      container.width = pdfCanvas.width * scale;
-      container.height = pdfCanvas.height * scale;
+      const dpr = window.devicePixelRatio || 1;
+
+      container.width = pdfCanvas.width * dpr;
+      container.height = pdfCanvas.height * dpr;
+
       const ctx = container.getContext("2d");
-      ctx.scale(scale, scale);
+      ctx.scale(dpr, dpr);
       ctx.drawImage(pdfCanvas, 0, 0);
+
       const items = state.symbols.filter(item => item.page === state.pageNum);
+
       for (const item of items) {
         const def = symbolDefs.find(s => s.id === item.symbol);
-        if (item.kind === "text" || def?.kind === "text") {
+        if (!def) continue;
+
+        // Symbol zeichnen
+        const temp = document.createElement("div");
+        temp.innerHTML = def.svg;
+        const svg = temp.firstChild;
+        const svgData = new XMLSerializer().serializeToString(svg);
+        const img = await svgToImage(svgData);
+
+        ctx.save();
+        ctx.translate(item.x + item.size / 2, item.y + item.size / 2);
+        ctx.rotate((Math.PI / 180) * item.rotation);
+        ctx.translate(-item.size / 2, -item.size / 2);
+        ctx.drawImage(img, 0, 0, item.size, item.size);
+        ctx.restore();
+
+        // Stromkreis unterhalb
+        const circuitText = (item.circuit ?? "").trim();
+        if (circuitText) {
           ctx.save();
-          ctx.translate(item.x + item.size / 2, item.y + item.size / 2);
-          ctx.rotate((Math.PI / 180) * item.rotation);
-          ctx.translate(-item.size / 2, -item.size / 2);
-          ctx.font = `${item.size}px system-ui,Segoe UI,Roboto,Arial,sans-serif`;
+          ctx.font = `${Math.max(10, Math.round(item.size * 0.45))}px system-ui,Segoe UI,Roboto,Arial,sans-serif`;
           ctx.fillStyle = "#f8fafc";
-          ctx.fillText(item.text || state.textDefault, 0, item.size);
-          ctx.restore();
-        } else if (def) {
-          const temp = document.createElement("div");
-          temp.innerHTML = def.svg;
-          const svg = temp.firstChild;
-          const svgData = new XMLSerializer().serializeToString(svg);
-          const img = await svgToImage(svgData);
-          ctx.save();
-          ctx.translate(item.x + item.size / 2, item.y + item.size / 2);
-          ctx.rotate((Math.PI / 180) * item.rotation);
-          ctx.translate(-item.size / 2, -item.size / 2);
-          ctx.drawImage(img, 0, 0, item.size, item.size);
+          ctx.fillText(circuitText, item.x, item.y + item.size + 16);
           ctx.restore();
         }
+
+        // Note NICHT exportieren (weil "nur bei Auswahl sichtbar" gewünscht)
+        // Wenn du sie im Export trotzdem willst, sag Bescheid.
       }
+
       const link = document.createElement("a");
       link.download = `${state.projectName || "sicherheitsplan"}_seite_${state.pageNum}.png`;
       link.href = container.toDataURL("image/png");
@@ -799,20 +902,17 @@
     function init() {
       renderSymbolButtons();
       loadState();
+
       zoomRange.value = state.scale * 100;
       textDefault.value = state.textDefault;
+
       state.pdfjsReady = !!window.pdfjsLib;
       updateStatus();
+
       setTimeout(() => {
         state.pdfjsReady = !!window.pdfjsLib;
         updateStatus();
       }, 1500);
-      overlay.addEventListener("pointerdown", () => {
-        if (!state.activeSymbol) {
-          state.selectedId = null;
-          renderOverlay();
-        }
-      });
     }
 
     init();
