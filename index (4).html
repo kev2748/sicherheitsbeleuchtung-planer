@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sicherheitsbeleuchtung Planer</title>
+  <meta name="theme-color" content="#0b1220" />
+  <style>
+    :root{--bg:#0b1220;--panel:#111827;--line:#24324a;--txt:#e5e7eb;--mut:#94a3b8;}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--txt)}
+    header{position:sticky;top:0;z-index:10;background:#0f172a;border-bottom:1px solid var(--line);padding:10px 12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .btn{background:#1f2937;border:1px solid var(--line);color:var(--txt);padding:10px 12px;border-radius:12px;font-weight:700;cursor:pointer}
+    .btn.primary{background:#0b2a16;border-color:#16a34a}
+    .chip{padding:8px 10px;border:1px solid var(--line);border-radius:999px;color:var(--mut);font-size:12px}
+    input[type=file]{display:none}
+    main{padding:12px}
+    .wrap{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+    canvas{display:block;width:100%;height:auto;touch-action:none;background:#0a0f1d}
+  </style>
+
+  <!-- CDN libs (GitHub Pages: https) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <label class="btn primary">PDF laden <input id="filePdf" type="file" accept="application/pdf"></label>
+    <button id="btnExport" class="btn">Export PDF</button>
+    <span class="chip" id="status">Bereit</span>
+  </header>
+
+  <main>
+    <div class="wrap">
+      <canvas id="c"></canvas>
+    </div>
+  </main>
+
+<script>
+(function(){
+  const statusEl = document.getElementById("status");
+  const setStatus = (t)=> statusEl.textContent = t;
+
+  if (!window.pdfjsLib) {
+    setStatus("FEHLER: pdf.js nicht geladen (CDN blockiert?)");
+    alert("pdf.js wurde nicht geladen. Prüfe Internet/Adblocker. Öffne die Seite über GitHub Pages (https).");
+    return;
+  }
+  if (!window.jspdf) {
+    setStatus("FEHLER: jsPDF nicht geladen (CDN blockiert?)");
+    alert("jsPDF wurde nicht geladen. Prüfe Internet/Adblocker.");
+    return;
+  }
+
+  try {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  } catch(e) {}
+
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d");
+  let pdfDoc=null, page=null, viewport=null;
+
+  async function renderPage(){
+    if (!page) return;
+    canvas.width = Math.floor(viewport.width);
+    canvas.height = Math.floor(viewport.height);
+    await page.render({canvasContext: ctx, viewport}).promise;
+  }
+
+  document.getElementById("filePdf").addEventListener("change", async (e)=>{
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    try{
+      setStatus("PDF wird geladen…");
+      const data = new Uint8Array(await f.arrayBuffer());
+      pdfDoc = await pdfjsLib.getDocument({data}).promise;
+      page = await pdfDoc.getPage(1);
+      viewport = page.getViewport({scale: 1.5});
+      await renderPage();
+      setStatus("PDF bereit (Seite 1)");
+    } catch(err){
+      console.error(err);
+      setStatus("PDF Fehler");
+      alert("PDF konnte nicht geladen werden: " + (err?.message || "Unbekannter Fehler"));
+    } finally {
+      e.target.value = "";
+    }
+  });
+
+  document.getElementById("btnExport").addEventListener("click", ()=>{
+    if (!page) return alert("Bitte zuerst PDF laden.");
+    const { jsPDF } = window.jspdf;
+    const img = canvas.toDataURL("image/png");
+    const pdf = new jsPDF({orientation:"landscape", unit:"pt", format:[canvas.width, canvas.height]});
+    pdf.addImage(img, "PNG", 0, 0, canvas.width, canvas.height);
+    pdf.save("plan_export.pdf");
+  });
+
+  setStatus("Bereit – PDF laden");
+})();
+</script>
+</body>
+</html>
