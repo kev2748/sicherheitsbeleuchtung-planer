@@ -194,7 +194,7 @@
     #overlay{
       position:absolute;
       inset:0;
-      pointer-events:none;
+      pointer-events:auto;
     }
     .overlay-item{
       position:absolute;
@@ -271,7 +271,7 @@
       <div class="tool-grid" id="symbolGrid"></div>
       <div class="stack" style="margin-top:10px">
         <label for="symbolSize">Symbolgröße</label>
-        <input id="symbolSize" type="range" min="18" max="80" value="36">
+        <input id="symbolSize" type="range" min="10" max="48" value="20">
         <label for="symbolRotate">Rotation</label>
         <input id="symbolRotate" type="range" min="0" max="360" value="0">
         <label for="textDefault">Text (Stromkreis)</label>
@@ -366,6 +366,18 @@
         svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M28 16H18v32h10v-8h-6V24h6v-8Z" fill="#fff"/><path d="M38 26c-1.7 0-3-1.3-3-3s1.3-3 3-3 3 1.3 3 3-1.3 3-3 3Z" fill="#fff"/><path d="M44 42l-4-10-6 4-4 8 4 2 3-6 2 4h5Z" fill="#fff"/><path d="M52 32H34" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M48 26l8 6-8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
       },
       {
+        id: "exit-up",
+        label: "Rettungszeichen oben",
+        kind: "svg",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M16 40h32v10H16V40Z" fill="#fff"/><path d="M32 24c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3Z" fill="#fff"/><path d="M24 34l4-6 8 6 4 8-5 2-3-8-3 4h-5Z" fill="#fff"/><path d="M32 12v18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 16l6-8 6 8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+      },
+      {
+        id: "exit-down",
+        label: "Rettungszeichen unten",
+        kind: "svg",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M16 14h32v10H16V14Z" fill="#fff"/><path d="M32 40c1.7 0 3 1.3 3 3s-1.3 3-3 3-3-1.3-3-3 1.3-3 3-3Z" fill="#fff"/><path d="M24 30l4 6 8-6 4-8-5-2-3 8-3-4h-5Z" fill="#fff"/><path d="M32 52V34" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 48l6 8 6-8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+      },
+      {
         id: "exit-straight",
         label: "Rettungszeichen geradeaus",
         kind: "svg",
@@ -452,8 +464,16 @@
         btn.type = "button";
         btn.className = "symbol-btn";
         btn.dataset.symbol = def.id;
-        btn.innerHTML = `${def.svg}<span>${def.label}</span>`;
+        const icon = def.kind === "text"
+          ? `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1e293b"/><path d="M20 18h24M32 18v28M24 46h16" stroke="#fff" stroke-width="4" stroke-linecap="round"/></svg>`
+          : def.svg;
+        btn.innerHTML = `${icon}<span>${def.label}</span>`;
         btn.addEventListener("click", () => setActiveSymbol(def.id));
+        btn.addEventListener("pointerdown", () => setActiveSymbol(def.id));
+        btn.setAttribute("draggable", "true");
+        btn.addEventListener("dragstart", (event) => {
+          event.dataTransfer.setData("text/plain", def.id);
+        });
         symbolGrid.appendChild(btn);
       });
     }
@@ -664,13 +684,13 @@
       saveState();
     });
 
-    overlay.addEventListener("click", (event) => {
+    function placeSymbolAt(clientX, clientY) {
       if (!state.activeSymbol || !state.pdfDoc) return;
       const rect = overlay.getBoundingClientRect();
       const scale = state.scale;
       const size = Number(symbolSize.value);
-      const x = (event.clientX - rect.left) / scale - size / 2;
-      const y = (event.clientY - rect.top) / scale - size / 2;
+      const x = (clientX - rect.left) / scale - size / 2;
+      const y = (clientY - rect.top) / scale - size / 2;
       const id = `sym_${Date.now()}_${Math.random().toString(16).slice(2)}`;
       const def = symbolDefs.find(s => s.id === state.activeSymbol);
       const symbol = {
@@ -687,6 +707,22 @@
       state.symbols.push(symbol);
       selectSymbol(id);
       saveState();
+    }
+
+    overlay.addEventListener("click", (event) => {
+      placeSymbolAt(event.clientX, event.clientY);
+    });
+
+    overlay.addEventListener("dragover", (event) => {
+      event.preventDefault();
+    });
+
+    overlay.addEventListener("drop", (event) => {
+      event.preventDefault();
+      const symbolId = event.dataTransfer.getData("text/plain");
+      if (!symbolId) return;
+      setActiveSymbol(symbolId);
+      placeSymbolAt(event.clientX, event.clientY);
     });
 
     btnDelete.addEventListener("click", () => {
