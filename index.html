@@ -24,6 +24,7 @@
       font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
       color:var(--ink);
       background:var(--bg);
+      touch-action:manipulation;
     }
     header{
       position:sticky;
@@ -38,7 +39,7 @@
       justify-content:space-between;
     }
     header h1{
-      font-size:16px;
+      font-size:17px;
       margin:0;
       letter-spacing:.3px;
     }
@@ -54,6 +55,15 @@
     }
     @media(max-width:980px){
       main{grid-template-columns:1fr}
+    }
+    @media(pointer:coarse){
+      body{font-size:16px}
+      header h1{font-size:18px}
+      .btn{min-height:46px}
+      input[type="text"],select{min-height:46px;font-size:16px}
+      .symbol-btn{min-height:56px}
+      .canvas-toolbar{gap:10px}
+      #overlay{touch-action:none}
     }
     .panel{
       background:var(--panel);
@@ -151,6 +161,30 @@
       overflow:auto;
       border:1px dashed #24324a;
       min-height:60vh;
+      touch-action:pan-x pan-y;
+    }
+    .empty-state{
+      position:absolute;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+      color:#cbd5f5;
+      padding:24px;
+      pointer-events:none;
+      background:linear-gradient(180deg,rgba(10,15,29,.6),rgba(10,15,29,.85));
+    }
+    .empty-state strong{
+      display:block;
+      font-size:16px;
+      margin-bottom:6px;
+      color:#f8fafc;
+    }
+    .empty-state span{
+      display:block;
+      font-size:13px;
+      color:var(--muted);
     }
     #pdfCanvas{
       display:block;
@@ -188,10 +222,477 @@
       color:var(--muted);
       line-height:1.4;
     }
+    kbd{
+      background:#0f172a;
+      border:1px solid #334155;
+      border-radius:6px;
+      padding:1px 6px;
+      font-size:12px;
+      color:#e2e8f0;
+    }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
 </head>
 <body>
-  <!-- (Rest der Datei unverändert) -->
+  <header>
+    <div>
+      <h1>Sicherheitsbeleuchtung Planer</h1>
+      <div class="hint">PDF hochladen, Rettungszeichen & Lampen platzieren, SIBE-Plan erstellen.</div>
+    </div>
+    <div class="hint">
+      Offline-HTML · lokal im Browser ·
+      <a href="sicherheitsbeleuchtung_planer.zip" style="color:#93c5fd">ZIP herunterladen</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>Plan laden</h2>
+      <div class="stack">
+        <label for="pdfInput">PDF-Plan hochladen</label>
+        <input id="pdfInput" type="file" accept="application/pdf">
+        <label for="projectName">Projektname</label>
+        <input id="projectName" type="text" placeholder="z. B. Werkhalle Nord">
+        <div class="status" id="projectStatus">Kein PDF geladen.</div>
+      </div>
+      <hr style="border-color:var(--line);margin:12px 0">
+      <h2>Symbole</h2>
+      <div class="tool-grid" id="symbolGrid"></div>
+      <div class="stack" style="margin-top:10px">
+        <label for="symbolSize">Symbolgröße</label>
+        <input id="symbolSize" type="range" min="18" max="80" value="36">
+        <label for="symbolRotate">Rotation</label>
+        <input id="symbolRotate" type="range" min="0" max="360" value="0">
+        <button class="btn secondary" id="btnDelete" disabled>Auswahl löschen</button>
+      </div>
+      <hr style="border-color:var(--line);margin:12px 0">
+      <h2>Hinweise</h2>
+      <p class="legend">
+        1. PDF laden.<br>
+        2. Symbol anklicken und im Plan platzieren.<br>
+        3. Symbole lassen sich per Drag & Drop mit Stift/Maus verschieben.<br>
+        4. Auswahl anklicken, Größe/Rotation anpassen.<br>
+        5. Änderungen werden lokal gespeichert (Tablet-freundlich).<br>
+        Tipp: Auswahl per <kbd>Entf</kbd>/<kbd>Backspace</kbd> löschen.
+      </p>
+    </section>
+
+    <section class="panel canvas-wrap">
+      <div class="canvas-toolbar">
+        <button class="btn" id="btnPrev">← Seite</button>
+        <div class="status" id="pageStatus">Seite 0 / 0</div>
+        <button class="btn" id="btnNext">Seite →</button>
+        <label style="display:flex;align-items:center;gap:6px">
+          Zoom
+          <input id="zoomRange" type="range" min="50" max="200" value="100">
+        </label>
+        <button class="btn secondary" id="btnResetView">Ansicht zurücksetzen</button>
+        <button class="btn secondary" id="btnExport" disabled>PNG exportieren</button>
+      </div>
+      <div class="canvas-area" id="canvasArea">
+        <canvas id="pdfCanvas"></canvas>
+        <div id="overlay"></div>
+        <div class="empty-state" id="emptyState">
+          <div>
+            <strong>Kein Plan geladen</strong>
+            <span id="emptyHintPrimary">Bitte oben eine PDF auswählen. Danach wird die Seite angezeigt.</span>
+            <span id="emptyHintSecondary">Wenn es schwarz bleibt: Internetzugang prüfen (pdf.js CDN).</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const pdfInput = document.getElementById("pdfInput");
+    const projectName = document.getElementById("projectName");
+    const projectStatus = document.getElementById("projectStatus");
+    const pageStatus = document.getElementById("pageStatus");
+    const pdfCanvas = document.getElementById("pdfCanvas");
+    const overlay = document.getElementById("overlay");
+    const emptyState = document.getElementById("emptyState");
+    const emptyHintPrimary = document.getElementById("emptyHintPrimary");
+    const emptyHintSecondary = document.getElementById("emptyHintSecondary");
+    const btnPrev = document.getElementById("btnPrev");
+    const btnNext = document.getElementById("btnNext");
+    const zoomRange = document.getElementById("zoomRange");
+    const btnResetView = document.getElementById("btnResetView");
+    const btnExport = document.getElementById("btnExport");
+    const symbolGrid = document.getElementById("symbolGrid");
+    const symbolSize = document.getElementById("symbolSize");
+    const symbolRotate = document.getElementById("symbolRotate");
+    const btnDelete = document.getElementById("btnDelete");
+
+    const STORAGE_KEY = "sibe_planner_state_v1";
+    const state = {
+      pdfData: null,
+      pdfName: "",
+      pageNum: 1,
+      pageCount: 0,
+      scale: 1,
+      activeSymbol: null,
+      symbols: [],
+      selectedId: null,
+      projectName: "",
+      pdfjsReady: false,
+    };
+
+    const symbolDefs = [
+      {
+        id: "exit-left",
+        label: "Rettungszeichen links",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="8" fill="#16a34a"/><path d="M45 20H29v8h10l-4 6-6-8H19l10 14-4 6 5 4 10-14h5v-16Z" fill="#fff"/><path d="M18 32h16" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M22 26l-8 6 8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+      },
+      {
+        id: "exit-right",
+        label: "Rettungszeichen rechts",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="8" fill="#16a34a"/><path d="M19 20h16v8H25l4 6 6-8h10L35 40l4 6-5 4-10-14h-5V20Z" fill="#fff"/><path d="M46 32H30" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M42 26l8 6-8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+      },
+      {
+        id: "exit-up",
+        label: "Rettungszeichen oben",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="8" fill="#16a34a"/><path d="M20 45V29h8v10l6-4-8-6v-10l14 10 6-4 4 5-14 10v5H20Z" fill="#fff"/><path d="M32 18v16" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 22l6-8 6 8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+      },
+      {
+        id: "exit-down",
+        label: "Rettungszeichen unten",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="8" fill="#16a34a"/><path d="M20 19v16h8V25l6 4-8 6v10l14-10 6 4 4-5-14-10v-5H20Z" fill="#fff"/><path d="M32 46V30" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 42l6 8 6-8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+      },
+      {
+        id: "lamp",
+        label: "Notleuchte",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="8" fill="#0ea5e9"/><path d="M16 30c0-8.8 7.2-16 16-16s16 7.2 16 16c0 6.3-3.7 11.8-9 14.3V50H25v-5.7c-5.3-2.5-9-8-9-14.3Z" fill="#fff"/><rect x="24" y="50" width="16" height="6" rx="2" fill="#fff"/></svg>`
+      },
+      {
+        id: "lamp-emergency",
+        label: "Sicherheitsleuchte",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="8" fill="#f59e0b"/><rect x="14" y="20" width="36" height="18" rx="4" fill="#fff"/><path d="M22 42h20l-2 6H24l-2-6Z" fill="#fff"/><path d="M32 10v6" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M20 14l4 4" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M44 14l-4 4" stroke="#fff" stroke-width="4" stroke-linecap="round"/></svg>`
+      }
+    ];
+
+    function saveState() {
+      const data = {
+        pageNum: state.pageNum,
+        scale: state.scale,
+        symbols: state.symbols,
+        projectName: state.projectName,
+        pdfName: state.pdfName,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    function loadState() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      try {
+        const data = JSON.parse(raw);
+        state.pageNum = data.pageNum || 1;
+        state.scale = data.scale || 1;
+        state.symbols = Array.isArray(data.symbols) ? data.symbols : [];
+        state.projectName = data.projectName || "";
+        state.pdfName = data.pdfName || "";
+        projectName.value = state.projectName;
+      } catch (error) {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    }
+
+    function setActiveSymbol(id) {
+      state.activeSymbol = id;
+      document.querySelectorAll(".symbol-btn").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.symbol === id);
+      });
+    }
+
+    function renderSymbolButtons() {
+      symbolGrid.innerHTML = "";
+      symbolDefs.forEach(def => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "symbol-btn";
+        btn.dataset.symbol = def.id;
+        btn.innerHTML = `${def.svg}<span>${def.label}</span>`;
+        btn.addEventListener("click", () => setActiveSymbol(def.id));
+        symbolGrid.appendChild(btn);
+      });
+    }
+
+    function updateStatus() {
+      if (!state.pdfjsReady) {
+        projectStatus.textContent = "PDF.js konnte nicht geladen werden. Bitte Internetzugang prüfen.";
+        emptyHintPrimary.textContent = "PDF.js fehlt: Prüfe Internetzugang oder lade die Seite neu.";
+        emptyHintSecondary.textContent = "Ohne PDF.js kann der Plan nicht gerendert werden.";
+      } else {
+        projectStatus.textContent = state.pdfName ? `PDF geladen: ${state.pdfName}` : "Kein PDF geladen.";
+        emptyHintPrimary.textContent = "Bitte oben eine PDF auswählen. Danach wird die Seite angezeigt.";
+        emptyHintSecondary.textContent = "Wenn es schwarz bleibt: Internetzugang prüfen (pdf.js CDN).";
+      }
+      pageStatus.textContent = `Seite ${state.pageNum} / ${state.pageCount}`;
+      btnPrev.disabled = state.pageNum <= 1;
+      btnNext.disabled = state.pageNum >= state.pageCount;
+      btnExport.disabled = !state.pageCount;
+      emptyState.style.display = state.pageCount ? "none" : "flex";
+    }
+
+    function renderOverlay() {
+      overlay.innerHTML = "";
+      const scale = state.scale;
+      const items = state.symbols.filter(item => item.page === state.pageNum);
+      items.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "overlay-item";
+        if (state.selectedId === item.id) {
+          div.classList.add("selected");
+        }
+        div.style.left = `${item.x * scale}px`;
+        div.style.top = `${item.y * scale}px`;
+        div.style.width = `${item.size * scale}px`;
+        div.style.height = `${item.size * scale}px`;
+        div.style.transform = `rotate(${item.rotation}deg)`;
+        const def = symbolDefs.find(s => s.id === item.symbol);
+        div.innerHTML = def ? def.svg : "";
+        div.dataset.id = item.id;
+        enableDrag(div);
+        div.addEventListener("click", (event) => {
+          event.stopPropagation();
+          selectSymbol(item.id);
+        });
+        overlay.appendChild(div);
+      });
+      btnDelete.disabled = !state.selectedId;
+    }
+
+    function selectSymbol(id) {
+      state.selectedId = id;
+      const item = state.symbols.find(s => s.id === id);
+      if (item) {
+        symbolSize.value = item.size;
+        symbolRotate.value = item.rotation;
+      }
+      renderOverlay();
+      saveState();
+    }
+
+    function updateSelectedSymbol() {
+      const item = state.symbols.find(s => s.id === state.selectedId);
+      if (!item) return;
+      item.size = Number(symbolSize.value);
+      item.rotation = Number(symbolRotate.value);
+      renderOverlay();
+      saveState();
+    }
+
+    function enableDrag(element) {
+      let startX = 0;
+      let startY = 0;
+      let originX = 0;
+      let originY = 0;
+      const onMove = (event) => {
+        const dx = event.clientX - startX;
+        const dy = event.clientY - startY;
+        const scale = state.scale;
+        const item = state.symbols.find(s => s.id === element.dataset.id);
+        if (!item) return;
+        item.x = Math.max(0, originX + dx / scale);
+        item.y = Math.max(0, originY + dy / scale);
+        renderOverlay();
+      };
+      const stopMove = () => {
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", stopMove);
+        saveState();
+      };
+      element.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        const item = state.symbols.find(s => s.id === element.dataset.id);
+        if (!item) return;
+        selectSymbol(item.id);
+        startX = event.clientX;
+        startY = event.clientY;
+        originX = item.x;
+        originY = item.y;
+        element.setPointerCapture(event.pointerId);
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", stopMove, { once: true });
+      });
+    }
+
+    async function renderPage(pdf, pageNum) {
+      const page = await pdf.getPage(pageNum);
+      const viewport = page.getViewport({ scale: state.scale });
+      pdfCanvas.width = viewport.width;
+      pdfCanvas.height = viewport.height;
+      overlay.style.width = `${viewport.width}px`;
+      overlay.style.height = `${viewport.height}px`;
+      const ctx = pdfCanvas.getContext("2d");
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      renderOverlay();
+      updateStatus();
+    }
+
+    async function loadPdf(data) {
+      if (!window.pdfjsLib) {
+        state.pdfjsReady = false;
+        updateStatus();
+        return;
+      }
+      state.pdfjsReady = true;
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      try {
+        const pdf = await pdfjsLib.getDocument({ data }).promise;
+        state.pageCount = pdf.numPages;
+        state.pdfDoc = pdf;
+        if (state.pageNum > state.pageCount) state.pageNum = 1;
+        await renderPage(pdf, state.pageNum);
+      } catch (error) {
+        projectStatus.textContent = "PDF konnte nicht geladen werden. Datei prüfen oder neu versuchen.";
+      }
+    }
+
+    pdfInput.addEventListener("change", async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      state.pdfName = file.name;
+      const arrayBuffer = await file.arrayBuffer();
+      state.pdfData = new Uint8Array(arrayBuffer);
+      state.pageNum = 1;
+      await loadPdf(state.pdfData);
+      saveState();
+    });
+
+    projectName.addEventListener("input", () => {
+      state.projectName = projectName.value;
+      saveState();
+    });
+
+    btnPrev.addEventListener("click", async () => {
+      if (!state.pdfDoc || state.pageNum <= 1) return;
+      state.pageNum -= 1;
+      await renderPage(state.pdfDoc, state.pageNum);
+      saveState();
+    });
+
+    btnNext.addEventListener("click", async () => {
+      if (!state.pdfDoc || state.pageNum >= state.pageCount) return;
+      state.pageNum += 1;
+      await renderPage(state.pdfDoc, state.pageNum);
+      saveState();
+    });
+
+    zoomRange.addEventListener("input", async () => {
+      if (!state.pdfDoc) return;
+      state.scale = Number(zoomRange.value) / 100;
+      await renderPage(state.pdfDoc, state.pageNum);
+      saveState();
+    });
+
+    btnResetView.addEventListener("click", async () => {
+      if (!state.pdfDoc) return;
+      state.scale = 1;
+      zoomRange.value = 100;
+      await renderPage(state.pdfDoc, state.pageNum);
+      saveState();
+    });
+
+    overlay.addEventListener("click", (event) => {
+      if (!state.activeSymbol || !state.pdfDoc) return;
+      const rect = overlay.getBoundingClientRect();
+      const scale = state.scale;
+      const size = Number(symbolSize.value);
+      const x = (event.clientX - rect.left) / scale - size / 2;
+      const y = (event.clientY - rect.top) / scale - size / 2;
+      const id = `sym_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      const symbol = {
+        id,
+        symbol: state.activeSymbol,
+        x: Math.max(0, x),
+        y: Math.max(0, y),
+        size,
+        rotation: Number(symbolRotate.value),
+        page: state.pageNum,
+      };
+      state.symbols.push(symbol);
+      selectSymbol(id);
+      saveState();
+    });
+
+    btnDelete.addEventListener("click", () => {
+      if (!state.selectedId) return;
+      state.symbols = state.symbols.filter(s => s.id !== state.selectedId);
+      state.selectedId = null;
+      renderOverlay();
+      saveState();
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (!state.selectedId) return;
+      if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        btnDelete.click();
+      }
+    });
+
+    symbolSize.addEventListener("input", updateSelectedSymbol);
+    symbolRotate.addEventListener("input", updateSelectedSymbol);
+
+    function svgToImage(svgMarkup) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.src = `data:image/svg+xml;base64,${btoa(svgMarkup)}`;
+      });
+    }
+
+    btnExport.addEventListener("click", async () => {
+      const container = document.createElement("canvas");
+      const scale = window.devicePixelRatio || 1;
+      container.width = pdfCanvas.width * scale;
+      container.height = pdfCanvas.height * scale;
+      const ctx = container.getContext("2d");
+      ctx.scale(scale, scale);
+      ctx.drawImage(pdfCanvas, 0, 0);
+      const items = state.symbols.filter(item => item.page === state.pageNum);
+      for (const item of items) {
+        const def = symbolDefs.find(s => s.id === item.symbol);
+        if (!def) continue;
+        const temp = document.createElement("div");
+        temp.innerHTML = def.svg;
+        const svg = temp.firstChild;
+        const svgData = new XMLSerializer().serializeToString(svg);
+        const img = await svgToImage(svgData);
+        ctx.save();
+        ctx.translate(item.x + item.size / 2, item.y + item.size / 2);
+        ctx.rotate((Math.PI / 180) * item.rotation);
+        ctx.translate(-item.size / 2, -item.size / 2);
+        ctx.drawImage(img, 0, 0, item.size, item.size);
+        ctx.restore();
+      }
+      const link = document.createElement("a");
+      link.download = `${state.projectName || "sicherheitsplan"}_seite_${state.pageNum}.png`;
+      link.href = container.toDataURL("image/png");
+      link.click();
+    });
+
+    function init() {
+      renderSymbolButtons();
+      loadState();
+      zoomRange.value = state.scale * 100;
+      state.pdfjsReady = !!window.pdfjsLib;
+      updateStatus();
+      setTimeout(() => {
+        state.pdfjsReady = !!window.pdfjsLib;
+        updateStatus();
+      }, 1500);
+      overlay.addEventListener("pointerdown", () => {
+        if (!state.activeSymbol) {
+          state.selectedId = null;
+          renderOverlay();
+        }
+      });
+    }
+
+    init();
+  </script>
 </body>
 </html>
