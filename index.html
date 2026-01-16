@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Sicherheitsbeleuchtung Planer – HTML</title>
+  <title>Sicherheitsbeleuchtung Planer – PDF/JPG</title>
   <meta name="theme-color" content="#0b1220" />
 
   <style>
@@ -51,9 +51,10 @@
 
     main{
       display:grid;
-      grid-template-columns:240px 1fr; /* kleiner als vorher */
+      grid-template-columns:240px 1fr;
       gap:12px;
       padding:12px;
+      align-items:start;
     }
     @media(max-width:980px){
       main{grid-template-columns:1fr}
@@ -78,6 +79,15 @@
       font-size:14px;
       margin:0 0 8px 0;
     }
+
+    /* linkes Feld scrollbar + sticky */
+    .sidebar{
+      position:sticky;
+      top:72px;
+      max-height:calc(100vh - 84px);
+      overflow:auto;
+    }
+
     .stack{display:flex;flex-direction:column;gap:8px}
     label{font-size:12px;color:var(--muted)}
     input[type="file"],
@@ -118,7 +128,7 @@
 
     .tool-grid{
       display:grid;
-      grid-template-columns:1fr; /* kompakter */
+      grid-template-columns:1fr;
       gap:6px;
     }
     .symbol-btn{
@@ -131,7 +141,7 @@
       align-items:center;
       gap:8px;
       cursor:pointer;
-      min-height:40px; /* kleiner */
+      min-height:40px;
       text-align:left;
     }
     .symbol-btn.active{
@@ -139,7 +149,7 @@
       box-shadow:0 0 0 2px #1d4ed8;
     }
     .symbol-btn svg{
-      width:22px; /* kleiner */
+      width:22px;
       height:22px;
       flex:0 0 auto;
     }
@@ -215,6 +225,11 @@
       outline:2px solid var(--focus);
       border-radius:6px;
     }
+    .overlay-item.dragging{
+      cursor:grabbing;
+      outline:2px dashed #93c5fd;
+      border-radius:6px;
+    }
     .overlay-item svg{width:100%;height:100%;}
     .status{font-size:12px;color:var(--muted);}
     .legend{font-size:12px;color:var(--muted);line-height:1.4;}
@@ -233,7 +248,7 @@
     }
   </style>
 
-  <!-- Hinweis: aktuell per CDN. Für echtes Offline: pdf.min.js + worker lokal einbinden. -->
+  <!-- Für PDF-Rendering (JPG/PNG läuft ohne pdf.js) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
 </head>
 
@@ -241,7 +256,7 @@
   <header>
     <div>
       <h1>Sicherheitsbeleuchtung Planer</h1>
-      <div class="hint">PDF hochladen, Rettungszeichen & Lampen platzieren, SIBE-Plan erstellen.</div>
+      <div class="hint">PDF oder Bild (JPG/PNG) laden, Symbole platzieren, SIBE-Plan erstellen.</div>
     </div>
     <div class="hint">
       Offline-HTML · lokal im Browser ·
@@ -250,16 +265,16 @@
   </header>
 
   <main>
-    <section class="panel">
+    <section class="panel sidebar">
       <h2>Plan laden</h2>
       <div class="stack">
-        <label for="pdfInput">PDF-Plan hochladen</label>
-        <input id="pdfInput" type="file" accept="application/pdf" />
+        <label for="pdfInput">Plan hochladen (PDF/JPG/PNG)</label>
+        <input id="pdfInput" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" />
 
         <label for="projectName">Projektname</label>
         <input id="projectName" type="text" placeholder="z. B. Werkhalle Nord" />
 
-        <div class="status" id="projectStatus">Kein PDF geladen.</div>
+        <div class="status" id="projectStatus">Kein Plan geladen.</div>
       </div>
 
       <hr style="border-color:var(--line);margin:12px 0" />
@@ -288,7 +303,8 @@
         <button class="btn secondary" id="btnDelete" disabled>Auswahl löschen</button>
 
         <div class="mini">
-          Tipp: Symbol anklicken → Stromkreis/Beschriftung links eintragen. Beschriftung erscheint nur bei ausgewähltem Symbol.
+          Tipp: Symbol anklicken → im Plan klicken zum Platzieren. Danach Symbol anklicken und links Stromkreis/Beschriftung setzen.
+          Zum Verschieben: Symbol anfassen und ziehen.
         </div>
       </div>
 
@@ -296,12 +312,12 @@
 
       <h2>Hinweise</h2>
       <p class="legend">
-        1. PDF laden.<br />
+        1. PDF oder Bild laden.<br />
         2. Symbol anklicken und im Plan platzieren.<br />
         3. Symbole lassen sich per Drag & Drop mit Stift/Maus verschieben.<br />
         4. Auswahl anklicken, Größe/Rotation + Stromkreis/Beschriftung anpassen.<br />
         5. Änderungen werden lokal gespeichert (Tablet-freundlich).<br />
-        <span class="mini">Hinweis: Die SVG-Symbole sind vereinfachte Icons (nicht “zertifizierte” ISO-Assets).</span>
+        <span class="mini">PDF benötigt pdf.js (CDN). Bilder (JPG/PNG/WebP) funktionieren ohne Internet.</span>
       </p>
     </section>
 
@@ -327,8 +343,8 @@
         <div class="empty-state" id="emptyState">
           <div>
             <strong>Kein Plan geladen</strong>
-            <span id="emptyHintPrimary">Bitte oben eine PDF auswählen. Danach wird die Seite angezeigt.</span>
-            <span id="emptyHintSecondary">Wenn es schwarz bleibt: Internetzugang prüfen (pdf.js CDN).</span>
+            <span id="emptyHintPrimary">Bitte oben eine PDF oder ein Bild auswählen. Danach wird die Seite angezeigt.</span>
+            <span id="emptyHintSecondary">Wenn PDF schwarz bleibt: Internetzugang prüfen (pdf.js CDN).</span>
           </div>
         </div>
       </div>
@@ -336,7 +352,7 @@
   </main>
 
   <script>
-    const pdfInput = document.getElementById("pdfInput");
+    const fileInput = document.getElementById("pdfInput");
     const projectName = document.getElementById("projectName");
     const projectStatus = document.getElementById("projectStatus");
     const pageStatus = document.getElementById("pageStatus");
@@ -360,84 +376,57 @@
     const symbolNote = document.getElementById("symbolNote");
     const btnDelete = document.getElementById("btnDelete");
 
-    const STORAGE_KEY = "sibe_planner_state_v2"; // v2 wegen neuer Felder
+    const STORAGE_KEY = "sibe_planner_state_v3";
 
     const state = {
+      // Hintergrund
+      bgType: null,         // "pdf" | "image"
+      bgName: "",
       pdfData: null,
-      pdfName: "",
+      pdfDoc: null,
+
+      imageUrl: null,       // objectURL
+      imageEl: null,
+      imageNaturalW: 0,
+      imageNaturalH: 0,
+
+      // Viewer
       pageNum: 1,
       pageCount: 0,
       scale: 1,
+
+      // Symbole
       activeSymbol: null,
       symbols: [],
       selectedId: null,
+
+      // Meta
       projectName: "",
       pdfjsReady: false,
       textDefault: "Stromkreis A",
-      pdfDoc: null,
     };
 
     const symbolDefs = [
-      {
-        id: "exit-left",
-        label: "Rettungszeichen links",
-        kind: "svg",
-        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M36 16h10v32H36v-8h6V24h-6v-8Z" fill="#fff"/><path d="M26 26c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3Z" fill="#fff"/><path d="M20 42l4-10 6 4 4 8-4 2-3-6-2 4h-5Z" fill="#fff"/><path d="M12 32h18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M16 26l-8 6 8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-      },
-      {
-        id: "exit-right",
-        label: "Rettungszeichen rechts",
-        kind: "svg",
-        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M28 16H18v32h10v-8h-6V24h6v-8Z" fill="#fff"/><path d="M38 26c-1.7 0-3-1.3-3-3s1.3-3 3-3 3 1.3 3 3-1.3 3-3 3Z" fill="#fff"/><path d="M44 42l-4-10-6 4-4 8 4 2 3-6 2 4h5Z" fill="#fff"/><path d="M52 32H34" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M48 26l8 6-8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-      },
-      {
-        id: "exit-up",
-        label: "Rettungszeichen oben",
-        kind: "svg",
-        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M16 40h32v10H16V40Z" fill="#fff"/><path d="M32 24c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3Z" fill="#fff"/><path d="M24 34l4-6 8 6 4 8-5 2-3-8-3 4h-5Z" fill="#fff"/><path d="M32 12v18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 16l6-8 6 8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-      },
-      {
-        id: "exit-down",
-        label: "Rettungszeichen unten",
-        kind: "svg",
-        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M16 14h32v10H16V14Z" fill="#fff"/><path d="M32 40c1.7 0 3 1.3 3 3s-1.3 3-3 3-3-1.3-3-3 1.3-3 3-3Z" fill="#fff"/><path d="M24 30l4 6 8-6 4-8-5-2-3 8-3-4h-5Z" fill="#fff"/><path d="M32 52V34" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 48l6 8 6-8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-      },
-      {
-        id: "exit-straight",
-        label: "Rettungszeichen geradeaus",
-        kind: "svg",
-        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M16 42V32h8v6h16v-6h8v10H16Z" fill="#fff"/><path d="M32 20c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3Z" fill="#fff"/><path d="M24 30l4-6 8 6 4 10-5 2-3-8-3 4h-5Z" fill="#fff"/><path d="M32 12v18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 16l6-8 6 8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-      },
-      {
-        id: "cube-left",
-        label: "Würfelpfeil links",
-        kind: "svg",
-        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M36 18l12 6v14l-12 6-12-6V24l12-6Z" stroke="#fff" stroke-width="3"/><path d="M36 18v20l12-6" stroke="#fff" stroke-width="3"/><path d="M12 32h18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M16 26l-8 6 8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-      },
-      {
-        id: "cube-right",
-        label: "Würfelpfeil rechts",
-        kind: "svg",
-        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M28 18l-12 6v14l12 6 12-6V24l-12-6Z" stroke="#fff" stroke-width="3"/><path d="M28 18v20l-12-6" stroke="#fff" stroke-width="3"/><path d="M52 32H34" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M48 26l8 6-8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-      },
-      {
-        id: "cube-straight",
-        label: "Würfelpfeil geradeaus",
-        kind: "svg",
-        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M32 16l12 6v14l-12 6-12-6V22l12-6Z" stroke="#fff" stroke-width="3"/><path d="M32 16v20l12-6" stroke="#fff" stroke-width="3"/><path d="M32 10v14" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 14l6-8 6 8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-      },
-      {
-        id: "lamp",
-        label: "Notleuchte",
-        kind: "svg",
-        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#0ea5e9"/><rect x="14" y="20" width="36" height="18" rx="4" fill="#fff"/><path d="M22 42h20l-2 6H24l-2-6Z" fill="#fff"/><path d="M32 10v6" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M20 14l4 4" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M44 14l-4 4" stroke="#fff" stroke-width="4" stroke-linecap="round"/></svg>`
-      },
-      {
-        id: "lamp-emergency",
-        label: "Sicherheitsleuchte",
-        kind: "svg",
-        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#f59e0b"/><path d="M16 32c0-8.8 7.2-16 16-16s16 7.2 16 16c0 6.3-3.7 11.8-9 14.3V50H25v-5.7c-5.3-2.5-9-8-9-14.3Z" fill="#fff"/><rect x="24" y="50" width="16" height="6" rx="2" fill="#fff"/></svg>`
-      }
+      { id: "exit-left", label: "Rettungszeichen links", kind: "svg",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M36 16h10v32H36v-8h6V24h-6v-8Z" fill="#fff"/><path d="M26 26c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3Z" fill="#fff"/><path d="M20 42l4-10 6 4 4 8-4 2-3-6-2 4h-5Z" fill="#fff"/><path d="M12 32h18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M16 26l-8 6 8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
+      { id: "exit-right", label: "Rettungszeichen rechts", kind: "svg",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M28 16H18v32h10v-8h-6V24h6v-8Z" fill="#fff"/><path d="M38 26c-1.7 0-3-1.3-3-3s1.3-3 3-3 3 1.3 3 3-1.3 3-3 3Z" fill="#fff"/><path d="M44 42l-4-10-6 4-4 8 4 2 3-6 2 4h5Z" fill="#fff"/><path d="M52 32H34" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M48 26l8 6-8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
+      { id: "exit-up", label: "Rettungszeichen oben", kind: "svg",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M16 40h32v10H16V40Z" fill="#fff"/><path d="M32 24c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3Z" fill="#fff"/><path d="M24 34l4-6 8 6 4 8-5 2-3-8-3 4h-5Z" fill="#fff"/><path d="M32 12v18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 16l6-8 6 8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
+      { id: "exit-down", label: "Rettungszeichen unten", kind: "svg",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M16 14h32v10H16V14Z" fill="#fff"/><path d="M32 40c1.7 0 3 1.3 3 3s-1.3 3-3 3-3-1.3-3-3 1.3-3 3-3Z" fill="#fff"/><path d="M24 30l4 6 8-6 4-8-5-2-3 8-3-4h-5Z" fill="#fff"/><path d="M32 52V34" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 48l6 8 6-8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
+      { id: "exit-straight", label: "Rettungszeichen geradeaus", kind: "svg",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M16 42V32h8v6h16v-6h8v10H16Z" fill="#fff"/><path d="M32 20c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3Z" fill="#fff"/><path d="M24 30l4-6 8 6 4 10-5 2-3-8-3 4h-5Z" fill="#fff"/><path d="M32 12v18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 16l6-8 6 8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
+      { id: "cube-left", label: "Würfelpfeil links", kind: "svg",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M36 18l12 6v14l-12 6-12-6V24l12-6Z" stroke="#fff" stroke-width="3"/><path d="M36 18v20l12-6" stroke="#fff" stroke-width="3"/><path d="M12 32h18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M16 26l-8 6 8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
+      { id: "cube-right", label: "Würfelpfeil rechts", kind: "svg",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M28 18l-12 6v14l12 6 12-6V24l-12-6Z" stroke="#fff" stroke-width="3"/><path d="M28 18v20l-12-6" stroke="#fff" stroke-width="3"/><path d="M52 32H34" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M48 26l8 6-8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
+      { id: "cube-straight", label: "Würfelpfeil geradeaus", kind: "svg",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M32 16l12 6v14l-12 6-12-6V22l12-6Z" stroke="#fff" stroke-width="3"/><path d="M32 16v20l12-6" stroke="#fff" stroke-width="3"/><path d="M32 10v14" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 14l6-8 6 8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
+      { id: "lamp", label: "Notleuchte", kind: "svg",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#0ea5e9"/><rect x="14" y="20" width="36" height="18" rx="4" fill="#fff"/><path d="M22 42h20l-2 6H24l-2-6Z" fill="#fff"/><path d="M32 10v6" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M20 14l4 4" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M44 14l-4 4" stroke="#fff" stroke-width="4" stroke-linecap="round"/></svg>` },
+      { id: "lamp-emergency", label: "Sicherheitsleuchte", kind: "svg",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#f59e0b"/><path d="M16 32c0-8.8 7.2-16 16-16s16 7.2 16 16c0 6.3-3.7 11.8-9 14.3V50H25v-5.7c-5.3-2.5-9-8-9-14.3Z" fill="#fff"/><rect x="24" y="50" width="16" height="6" rx="2" fill="#fff"/></svg>` },
     ];
 
     function saveState() {
@@ -446,7 +435,7 @@
         scale: state.scale,
         symbols: state.symbols,
         projectName: state.projectName,
-        pdfName: state.pdfName,
+        bgName: state.bgName,
         textDefault: state.textDefault,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -461,12 +450,12 @@
         state.scale = data.scale || 1;
         state.symbols = Array.isArray(data.symbols) ? data.symbols : [];
         state.projectName = data.projectName || "";
-        state.pdfName = data.pdfName || "";
+        state.bgName = data.bgName || "";
         state.textDefault = data.textDefault || state.textDefault;
 
         projectName.value = state.projectName;
         textDefault.value = state.textDefault;
-      } catch (error) {
+      } catch {
         localStorage.removeItem(STORAGE_KEY);
       }
     }
@@ -497,15 +486,14 @@
     }
 
     function updateStatus() {
-      if (!state.pdfjsReady) {
+      if (state.bgType === "pdf" && !state.pdfjsReady) {
         projectStatus.textContent = "PDF.js konnte nicht geladen werden. Bitte Internetzugang prüfen.";
-        emptyHintPrimary.textContent = "PDF.js fehlt: Prüfe Internetzugang oder lade die Seite neu.";
-        emptyHintSecondary.textContent = "Ohne PDF.js kann der Plan nicht gerendert werden.";
+        emptyHintSecondary.textContent = "Ohne PDF.js kann PDF nicht gerendert werden (Bilder funktionieren trotzdem).";
       } else {
-        projectStatus.textContent = state.pdfName ? `PDF geladen: ${state.pdfName}` : "Kein PDF geladen.";
-        emptyHintPrimary.textContent = "Bitte oben eine PDF auswählen. Danach wird die Seite angezeigt.";
-        emptyHintSecondary.textContent = "Wenn es schwarz bleibt: Internetzugang prüfen (pdf.js CDN).";
+        projectStatus.textContent = state.bgName ? `Plan geladen: ${state.bgName}` : "Kein Plan geladen.";
+        emptyHintSecondary.textContent = "Wenn PDF schwarz bleibt: Internetzugang prüfen (pdf.js CDN).";
       }
+
       pageStatus.textContent = `Seite ${state.pageNum} / ${state.pageCount}`;
       btnPrev.disabled = state.pageNum <= 1;
       btnNext.disabled = state.pageNum >= state.pageCount;
@@ -536,13 +524,8 @@
       saveState();
     }
 
-    // FIX: Drag ohne renderOverlay() im Move (sonst werden Elemente ständig neu gebaut)
     function enableDrag(element) {
-      let startX = 0;
-      let startY = 0;
-      let originX = 0;
-      let originY = 0;
-      let dragging = false;
+      let startX = 0, startY = 0, originX = 0, originY = 0, dragging = false;
 
       const onMove = (event) => {
         if (!dragging) return;
@@ -561,20 +544,24 @@
       };
 
       const stopMove = () => {
+        if (!dragging) return;
         dragging = false;
+        element.classList.remove("dragging");
         document.removeEventListener("pointermove", onMove);
         saveState();
-        renderOverlay(); // einmal am Ende
+        renderOverlay();
       };
 
       element.addEventListener("pointerdown", (event) => {
         event.preventDefault();
+        event.stopPropagation();
         const item = state.symbols.find(s => s.id === element.dataset.id);
         if (!item) return;
 
         selectSymbol(item.id);
 
         dragging = true;
+        element.classList.add("dragging");
         startX = event.clientX;
         startY = event.clientY;
         originX = item.x;
@@ -583,6 +570,7 @@
         element.setPointerCapture(event.pointerId);
         document.addEventListener("pointermove", onMove);
         document.addEventListener("pointerup", stopMove, { once: true });
+        document.addEventListener("pointercancel", stopMove, { once: true });
       });
     }
 
@@ -605,7 +593,7 @@
         const def = symbolDefs.find(s => s.id === item.symbol);
         div.innerHTML = def ? def.svg : "";
 
-        // Stromkreis (immer sichtbar unter Symbol)
+        // Stromkreis immer sichtbar
         const circuitText = (item.circuit ?? "").trim();
         if (circuitText) {
           const cap = document.createElement("div");
@@ -625,7 +613,7 @@
           div.appendChild(cap);
         }
 
-        // Beschriftung (nur sichtbar wenn ausgewählt)
+        // Beschriftung nur bei Auswahl sichtbar
         const noteText = (item.note ?? "").trim();
         if (state.selectedId === item.id && noteText) {
           const note = document.createElement("div");
@@ -656,11 +644,10 @@
         overlay.appendChild(div);
       });
 
-      btnDelete.disabled = !state.selectedId;
       updateStatus();
     }
 
-    async function renderPage(pdf, pageNum) {
+    async function renderPdfPage(pdf, pageNum) {
       const page = await pdf.getPage(pageNum);
       const viewport = page.getViewport({ scale: state.scale });
 
@@ -676,9 +663,32 @@
       updateStatus();
     }
 
+    function renderImage() {
+      const img = state.imageEl;
+      if (!img) return;
+
+      const w = Math.round(state.imageNaturalW * state.scale);
+      const h = Math.round(state.imageNaturalH * state.scale);
+
+      pdfCanvas.width = w;
+      pdfCanvas.height = h;
+      overlay.style.width = `${w}px`;
+      overlay.style.height = `${h}px`;
+
+      const ctx = pdfCanvas.getContext("2d");
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+
+      renderOverlay();
+      updateStatus();
+    }
+
     async function loadPdf(data) {
+      state.bgType = "pdf";
+
       if (!window.pdfjsLib) {
         state.pdfjsReady = false;
+        state.pageCount = 0;
         updateStatus();
         return;
       }
@@ -689,26 +699,79 @@
 
       try {
         const pdf = await pdfjsLib.getDocument({ data }).promise;
-        state.pageCount = pdf.numPages;
         state.pdfDoc = pdf;
-        if (state.pageNum > state.pageCount) state.pageNum = 1;
-        await renderPage(pdf, state.pageNum);
-      } catch (error) {
+        state.pageCount = pdf.numPages;
+        state.pageNum = 1;
+        await renderPdfPage(pdf, state.pageNum);
+      } catch {
         projectStatus.textContent = "PDF konnte nicht geladen werden. Datei prüfen oder neu versuchen.";
       }
     }
 
-    pdfInput.addEventListener("change", async (event) => {
+    async function loadImageFile(file) {
+      // alte URL freigeben
+      if (state.imageUrl) URL.revokeObjectURL(state.imageUrl);
+
+      state.bgType = "image";
+      state.pdfDoc = null;
+      state.pdfData = null;
+
+      state.pageCount = 1;
+      state.pageNum = 1;
+
+      const url = URL.createObjectURL(file);
+      state.imageUrl = url;
+
+      const img = new Image();
+      img.onload = () => {
+        state.imageEl = img;
+        state.imageNaturalW = img.naturalWidth || img.width;
+        state.imageNaturalH = img.naturalHeight || img.height;
+        renderImage();
+      };
+      img.onerror = () => {
+        projectStatus.textContent = "Bild konnte nicht geladen werden. Datei prüfen oder neu versuchen.";
+      };
+      img.src = url;
+    }
+
+    async function renderCurrent() {
+      if (state.bgType === "pdf" && state.pdfDoc) {
+        await renderPdfPage(state.pdfDoc, state.pageNum);
+      } else if (state.bgType === "image" && state.imageEl) {
+        renderImage();
+      } else {
+        updateStatus();
+      }
+    }
+
+    fileInput.addEventListener("change", async (event) => {
       const file = event.target.files[0];
       if (!file) return;
 
-      state.pdfName = file.name;
-      const arrayBuffer = await file.arrayBuffer();
-      state.pdfData = new Uint8Array(arrayBuffer);
-      state.pageNum = 1;
+      state.bgName = file.name;
+      state.selectedId = null;
 
-      await loadPdf(state.pdfData);
-      saveState();
+      // Symbole nicht löschen – bleiben projektweit; wenn du bei neuem Plan leeren willst, sag Bescheid.
+      // state.symbols = [];
+
+      const type = (file.type || "").toLowerCase();
+
+      if (type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+        const arrayBuffer = await file.arrayBuffer();
+        state.pdfData = new Uint8Array(arrayBuffer);
+        await loadPdf(state.pdfData);
+        saveState();
+        return;
+      }
+
+      if (type.startsWith("image/")) {
+        await loadImageFile(file);
+        saveState();
+        return;
+      }
+
+      projectStatus.textContent = "Unbekannter Dateityp. Bitte PDF oder Bild (JPG/PNG/WebP) wählen.";
     });
 
     projectName.addEventListener("input", () => {
@@ -717,57 +780,53 @@
     });
 
     btnPrev.addEventListener("click", async () => {
-      if (!state.pdfDoc || state.pageNum <= 1) return;
+      if (state.pageNum <= 1) return;
       state.pageNum -= 1;
-      await renderPage(state.pdfDoc, state.pageNum);
+      await renderCurrent();
       saveState();
     });
 
     btnNext.addEventListener("click", async () => {
-      if (!state.pdfDoc || state.pageNum >= state.pageCount) return;
+      if (state.pageNum >= state.pageCount) return;
       state.pageNum += 1;
-      await renderPage(state.pdfDoc, state.pageNum);
+      await renderCurrent();
       saveState();
     });
 
     zoomRange.addEventListener("input", async () => {
-      if (!state.pdfDoc) return;
       state.scale = Number(zoomRange.value) / 100;
-      await renderPage(state.pdfDoc, state.pageNum);
+      await renderCurrent();
       saveState();
     });
 
     btnResetView.addEventListener("click", async () => {
-      if (!state.pdfDoc) return;
       state.scale = 1;
       zoomRange.value = 100;
-      await renderPage(state.pdfDoc, state.pageNum);
+      await renderCurrent();
       saveState();
     });
 
     function placeSymbolAt(clientX, clientY) {
-      if (!state.activeSymbol || !state.pdfDoc) return;
+      if (!state.activeSymbol) return;
+      if (!state.pageCount) return; // kein Plan geladen
 
       const rect = overlay.getBoundingClientRect();
       const scale = state.scale;
       const size = Number(symbolSize.value);
+
       const x = (clientX - rect.left) / scale - size / 2;
       const y = (clientY - rect.top) / scale - size / 2;
 
       const id = `sym_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-      const def = symbolDefs.find(s => s.id === state.activeSymbol);
 
       const symbol = {
         id,
         symbol: state.activeSymbol,
-        kind: def?.kind || "symbol",
         x: Math.max(0, x),
         y: Math.max(0, y),
         size,
         rotation: Number(symbolRotate.value),
         page: state.pageNum,
-
-        // neu:
         circuit: state.textDefault,
         note: ""
       };
@@ -778,9 +837,6 @@
     }
 
     overlay.addEventListener("click", (event) => {
-      // Klick auf freie Fläche:
-      // - wenn ein aktives Symbol gewählt ist: platzieren
-      // - sonst: Auswahl entfernen
       if (state.activeSymbol) {
         placeSymbolAt(event.clientX, event.clientY);
       } else {
@@ -791,7 +847,6 @@
     });
 
     overlay.addEventListener("dragover", (event) => event.preventDefault());
-
     overlay.addEventListener("drop", (event) => {
       event.preventDefault();
       const symbolId = event.dataTransfer.getData("text/plain");
@@ -851,7 +906,6 @@
     btnExport.addEventListener("click", async () => {
       const container = document.createElement("canvas");
       const dpr = window.devicePixelRatio || 1;
-
       container.width = pdfCanvas.width * dpr;
       container.height = pdfCanvas.height * dpr;
 
@@ -865,7 +919,6 @@
         const def = symbolDefs.find(s => s.id === item.symbol);
         if (!def) continue;
 
-        // Symbol zeichnen
         const temp = document.createElement("div");
         temp.innerHTML = def.svg;
         const svg = temp.firstChild;
@@ -879,7 +932,6 @@
         ctx.drawImage(img, 0, 0, item.size, item.size);
         ctx.restore();
 
-        // Stromkreis unterhalb
         const circuitText = (item.circuit ?? "").trim();
         if (circuitText) {
           ctx.save();
@@ -888,9 +940,6 @@
           ctx.fillText(circuitText, item.x, item.y + item.size + 16);
           ctx.restore();
         }
-
-        // Note NICHT exportieren (weil "nur bei Auswahl sichtbar" gewünscht)
-        // Wenn du sie im Export trotzdem willst, sag Bescheid.
       }
 
       const link = document.createElement("a");
