@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Sicherheitsbeleuchtung Planer – PDF/JPG</title>
   <meta name="theme-color" content="#0b1220" />
+  <title>SIBE Planer</title>
 
   <style>
     :root{
@@ -27,27 +27,8 @@
       background:var(--bg);
       touch-action:manipulation;
     }
-    header{
-      position:sticky;
-      top:0;
-      z-index:10;
-      background:linear-gradient(90deg,#0f172a,#111827);
-      border-bottom:1px solid var(--line);
-      padding:10px 16px;
-      display:flex;
-      gap:16px;
-      align-items:center;
-      justify-content:space-between;
-    }
-    header h1{
-      font-size:17px;
-      margin:0;
-      letter-spacing:.3px;
-    }
-    header .hint{
-      color:var(--muted);
-      font-size:12px;
-    }
+
+    /* ✅ Header entfernt: kein sticky Kopfbereich */
 
     main{
       display:grid;
@@ -56,14 +37,11 @@
       padding:12px;
       align-items:start;
     }
-    @media(max-width:980px){
-      main{grid-template-columns:1fr}
-    }
+    @media(max-width:980px){ main{grid-template-columns:1fr} }
     @media(pointer:coarse){
       body{font-size:16px}
-      header h1{font-size:18px}
       .btn{min-height:46px}
-      input[type="text"],select{min-height:46px;font-size:16px}
+      input[type="text"]{min-height:46px;font-size:16px}
       .symbol-btn{min-height:48px}
       .canvas-toolbar{gap:10px}
       #overlay{touch-action:none}
@@ -75,29 +53,20 @@
       border-radius:12px;
       padding:12px;
     }
-    .panel h2{
-      font-size:14px;
-      margin:0 0 8px 0;
-    }
+    .panel h2{font-size:14px;margin:0 0 8px 0;}
 
-    /* linkes Feld scrollbar + sticky */
+    /* ✅ linkes Feld scrollbar (ohne Header daher top:12px) */
     .sidebar{
       position:sticky;
-      top:72px;
-      max-height:calc(100vh - 84px);
+      top:12px;
+      max-height:calc(100vh - 24px);
       overflow:auto;
     }
 
     .stack{display:flex;flex-direction:column;gap:8px}
     label{font-size:12px;color:var(--muted)}
-    input[type="file"],
-    input[type="text"],
-    select,
-    button,
-    input[type="range"]{
-      font:inherit;
-    }
-    input[type="text"],select{
+    input[type="file"],input[type="text"],button,input[type="range"]{font:inherit;}
+    input[type="text"]{
       width:100%;
       padding:8px 10px;
       border-radius:10px;
@@ -120,17 +89,10 @@
       border:1px solid var(--accent);
       color:var(--ink);
     }
-    .btn.danger{
-      background:var(--danger);
-      color:#fff;
-    }
+    .btn.danger{background:var(--danger);color:#fff;}
     .btn:disabled{opacity:.5;cursor:not-allowed;}
 
-    .tool-grid{
-      display:grid;
-      grid-template-columns:1fr;
-      gap:6px;
-    }
+    .tool-grid{display:grid;grid-template-columns:1fr;gap:6px;}
     .symbol-btn{
       border:1px solid var(--line);
       background:var(--panel-2);
@@ -148,11 +110,7 @@
       border-color:var(--focus);
       box-shadow:0 0 0 2px #1d4ed8;
     }
-    .symbol-btn svg{
-      width:22px;
-      height:22px;
-      flex:0 0 auto;
-    }
+    .symbol-btn svg{width:22px;height:22px;flex:0 0 auto;}
 
     .canvas-wrap{
       background:var(--panel);
@@ -179,38 +137,18 @@
       touch-action:pan-x pan-y;
     }
     .empty-state{
-      position:absolute;
-      inset:0;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      text-align:center;
-      color:#cbd5f5;
-      padding:24px;
+      position:absolute; inset:0;
+      display:flex; align-items:center; justify-content:center;
+      text-align:center; color:#cbd5f5; padding:24px;
       pointer-events:none;
       background:linear-gradient(180deg,rgba(10,15,29,.6),rgba(10,15,29,.85));
     }
-    .empty-state strong{
-      display:block;
-      font-size:16px;
-      margin-bottom:6px;
-      color:#f8fafc;
-    }
-    .empty-state span{
-      display:block;
-      font-size:13px;
-      color:var(--muted);
-    }
-    #pdfCanvas{
-      display:block;
-      margin:0 auto;
-      background:#111827;
-    }
-    #overlay{
-      position:absolute;
-      inset:0;
-      pointer-events:auto;
-    }
+    .empty-state strong{display:block;font-size:16px;margin-bottom:6px;color:#f8fafc;}
+    .empty-state span{display:block;font-size:13px;color:var(--muted);}
+
+    #pdfCanvas{display:block;margin:0 auto;background:#111827;}
+    #overlay{position:absolute;inset:0;pointer-events:auto;}
+
     .overlay-item{
       position:absolute;
       pointer-events:auto;
@@ -221,55 +159,30 @@
       justify-content:center;
       user-select:none;
     }
-    .overlay-item.selected{
-      outline:2px solid var(--focus);
-      border-radius:6px;
-    }
-    .overlay-item.dragging{
-      cursor:grabbing;
-      outline:2px dashed #93c5fd;
-      border-radius:6px;
-    }
+    .overlay-item.selected{outline:2px solid var(--focus);border-radius:6px;}
+    .overlay-item.dragging{cursor:grabbing;outline:2px dashed #93c5fd;border-radius:6px;}
     .overlay-item svg{width:100%;height:100%;}
+
     .status{font-size:12px;color:var(--muted);}
     .legend{font-size:12px;color:var(--muted);line-height:1.4;}
     kbd{
-      background:#0f172a;
-      border:1px solid #334155;
-      border-radius:6px;
-      padding:1px 6px;
-      font-size:12px;
-      color:#e2e8f0;
+      background:#0f172a;border:1px solid #334155;border-radius:6px;
+      padding:1px 6px;font-size:12px;color:#e2e8f0;
     }
-    .mini{
-      font-size:11px;
-      color:var(--muted);
-      line-height:1.35;
-    }
+    .mini{font-size:11px;color:var(--muted);line-height:1.35;}
   </style>
 
-  <!-- Für PDF-Rendering (JPG/PNG läuft ohne pdf.js) -->
+  <!-- PDF.js nur für PDF (Bilder funktionieren ohne Internet) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
 </head>
 
 <body>
-  <header>
-    <div>
-      <h1>Sicherheitsbeleuchtung Planer</h1>
-      <div class="hint">PDF oder Bild (JPG/PNG) laden, Symbole platzieren, SIBE-Plan erstellen.</div>
-    </div>
-    <div class="hint">
-      Offline-HTML · lokal im Browser ·
-      <a href="sicherheitsbeleuchtung_planer.zip" style="color:#93c5fd">ZIP herunterladen</a>
-    </div>
-  </header>
-
   <main>
     <section class="panel sidebar">
       <h2>Plan laden</h2>
       <div class="stack">
-        <label for="pdfInput">Plan hochladen (PDF/JPG/PNG)</label>
-        <input id="pdfInput" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" />
+        <label for="fileInput">Plan hochladen (PDF/JPG/PNG)</label>
+        <input id="fileInput" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" />
 
         <label for="projectName">Projektname</label>
         <input id="projectName" type="text" placeholder="z. B. Werkhalle Nord" />
@@ -278,6 +191,13 @@
       </div>
 
       <hr style="border-color:var(--line);margin:12px 0" />
+
+      <h2>Werkzeug</h2>
+      <div class="stack" style="margin-bottom:10px">
+        <button class="btn secondary" id="btnToolNone">✋ Auswahl aus / Maus</button>
+        <div class="status" id="toolStatus">Werkzeug: keines</div>
+        <div class="mini">Tipp: <kbd>Esc</kbd> = Werkzeug aus (keine neuen Symbole beim Klicken).</div>
+      </div>
 
       <h2>Symbole</h2>
       <div class="tool-grid" id="symbolGrid"></div>
@@ -289,22 +209,19 @@
         <label for="symbolRotate">Rotation</label>
         <input id="symbolRotate" type="range" min="0" max="360" value="0" />
 
-        <label for="textDefault">Standard Stromkreis</label>
-        <input id="textDefault" type="text" value="Stromkreis A" />
-
         <hr style="border-color:var(--line);margin:10px 0" />
 
+        <!-- ✅ Standard-Stromkreis entfernt -->
         <label for="symbolCircuit">Stromkreis (unter Symbol)</label>
-        <input id="symbolCircuit" type="text" placeholder="z. B. Stromkreis A" />
+        <input id="symbolCircuit" type="text" placeholder="z. B. A1 / SK-03" />
 
         <label for="symbolNote">Beschriftung (nur bei Auswahl sichtbar)</label>
-        <input id="symbolNote" type="text" placeholder="z. B. Leuchte über Tor 2" />
+        <input id="symbolNote" type="text" placeholder="z. B. über Tor 2" />
 
         <button class="btn secondary" id="btnDelete" disabled>Auswahl löschen</button>
 
         <div class="mini">
-          Tipp: Symbol anklicken → im Plan klicken zum Platzieren. Danach Symbol anklicken und links Stromkreis/Beschriftung setzen.
-          Zum Verschieben: Symbol anfassen und ziehen.
+          Klick auf Symbol = auswählen. Ziehen = verschieben.
         </div>
       </div>
 
@@ -313,11 +230,11 @@
       <h2>Hinweise</h2>
       <p class="legend">
         1. PDF oder Bild laden.<br />
-        2. Symbol anklicken und im Plan platzieren.<br />
-        3. Symbole lassen sich per Drag & Drop mit Stift/Maus verschieben.<br />
-        4. Auswahl anklicken, Größe/Rotation + Stromkreis/Beschriftung anpassen.<br />
-        5. Änderungen werden lokal gespeichert (Tablet-freundlich).<br />
-        <span class="mini">PDF benötigt pdf.js (CDN). Bilder (JPG/PNG/WebP) funktionieren ohne Internet.</span>
+        2. Symbol auswählen → im Plan klicken = platzieren.<br />
+        3. Symbol anklicken → links Stromkreis/Beschriftung setzen.<br />
+        4. <kbd>Esc</kbd> oder „Auswahl aus“ = kein versehentliches Platzieren.<br />
+        5. Alles wird lokal gespeichert (beim Schließen später weiterarbeiten).<br />
+        <span class="mini">Hinweis: PDF braucht pdf.js (CDN). Bilder funktionieren offline.</span>
       </p>
     </section>
 
@@ -343,7 +260,7 @@
         <div class="empty-state" id="emptyState">
           <div>
             <strong>Kein Plan geladen</strong>
-            <span id="emptyHintPrimary">Bitte oben eine PDF oder ein Bild auswählen. Danach wird die Seite angezeigt.</span>
+            <span id="emptyHintPrimary">Bitte links eine PDF oder ein Bild auswählen.</span>
             <span id="emptyHintSecondary">Wenn PDF schwarz bleibt: Internetzugang prüfen (pdf.js CDN).</span>
           </div>
         </div>
@@ -352,7 +269,7 @@
   </main>
 
   <script>
-    const fileInput = document.getElementById("pdfInput");
+    const fileInput = document.getElementById("fileInput");
     const projectName = document.getElementById("projectName");
     const projectStatus = document.getElementById("projectStatus");
     const pageStatus = document.getElementById("pageStatus");
@@ -371,63 +288,89 @@
     const symbolGrid = document.getElementById("symbolGrid");
     const symbolSize = document.getElementById("symbolSize");
     const symbolRotate = document.getElementById("symbolRotate");
-    const textDefault = document.getElementById("textDefault");
     const symbolCircuit = document.getElementById("symbolCircuit");
     const symbolNote = document.getElementById("symbolNote");
     const btnDelete = document.getElementById("btnDelete");
 
-    const STORAGE_KEY = "sibe_planner_state_v3";
+    const btnToolNone = document.getElementById("btnToolNone");
+    const toolStatus = document.getElementById("toolStatus");
+
+    const STORAGE_KEY = "sibe_planner_state_v5";
 
     const state = {
-      // Hintergrund
       bgType: null,         // "pdf" | "image"
       bgName: "",
+      bgLastModified: 0,
+
       pdfData: null,
       pdfDoc: null,
 
-      imageUrl: null,       // objectURL
+      imageUrl: null,
       imageEl: null,
       imageNaturalW: 0,
       imageNaturalH: 0,
 
-      // Viewer
       pageNum: 1,
       pageCount: 0,
       scale: 1,
 
-      // Symbole
       activeSymbol: null,
       symbols: [],
       selectedId: null,
 
-      // Meta
       projectName: "",
       pdfjsReady: false,
-      textDefault: "Stromkreis A",
     };
 
+    // ✅ Neues Symbol: Abzweigdose (neutral)
     const symbolDefs = [
-      { id: "exit-left", label: "Rettungszeichen links", kind: "svg",
+      { id: "exit-left", label: "Rettungszeichen links",
         svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M36 16h10v32H36v-8h6V24h-6v-8Z" fill="#fff"/><path d="M26 26c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3Z" fill="#fff"/><path d="M20 42l4-10 6 4 4 8-4 2-3-6-2 4h-5Z" fill="#fff"/><path d="M12 32h18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M16 26l-8 6 8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
-      { id: "exit-right", label: "Rettungszeichen rechts", kind: "svg",
+      { id: "exit-right", label: "Rettungszeichen rechts",
         svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M28 16H18v32h10v-8h-6V24h6v-8Z" fill="#fff"/><path d="M38 26c-1.7 0-3-1.3-3-3s1.3-3 3-3 3 1.3 3 3-1.3 3-3 3Z" fill="#fff"/><path d="M44 42l-4-10-6 4-4 8 4 2 3-6 2 4h5Z" fill="#fff"/><path d="M52 32H34" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M48 26l8 6-8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
-      { id: "exit-up", label: "Rettungszeichen oben", kind: "svg",
+      { id: "exit-up", label: "Rettungszeichen oben",
         svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M16 40h32v10H16V40Z" fill="#fff"/><path d="M32 24c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3Z" fill="#fff"/><path d="M24 34l4-6 8 6 4 8-5 2-3-8-3 4h-5Z" fill="#fff"/><path d="M32 12v18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 16l6-8 6 8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
-      { id: "exit-down", label: "Rettungszeichen unten", kind: "svg",
+      { id: "exit-down", label: "Rettungszeichen unten",
         svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M16 14h32v10H16V14Z" fill="#fff"/><path d="M32 40c1.7 0 3 1.3 3 3s-1.3 3-3 3-3-1.3-3-3 1.3-3 3-3Z" fill="#fff"/><path d="M24 30l4 6 8-6 4-8-5-2-3 8-3-4h-5Z" fill="#fff"/><path d="M32 52V34" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 48l6 8 6-8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
-      { id: "exit-straight", label: "Rettungszeichen geradeaus", kind: "svg",
+      { id: "exit-straight", label: "Rettungszeichen geradeaus",
         svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M16 42V32h8v6h16v-6h8v10H16Z" fill="#fff"/><path d="M32 20c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3Z" fill="#fff"/><path d="M24 30l4-6 8 6 4 10-5 2-3-8-3 4h-5Z" fill="#fff"/><path d="M32 12v18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 16l6-8 6 8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
-      { id: "cube-left", label: "Würfelpfeil links", kind: "svg",
+      { id: "cube-left", label: "Würfelpfeil links",
         svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M36 18l12 6v14l-12 6-12-6V24l12-6Z" stroke="#fff" stroke-width="3"/><path d="M36 18v20l12-6" stroke="#fff" stroke-width="3"/><path d="M12 32h18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M16 26l-8 6 8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
-      { id: "cube-right", label: "Würfelpfeil rechts", kind: "svg",
+      { id: "cube-right", label: "Würfelpfeil rechts",
         svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M28 18l-12 6v14l12 6 12-6V24l-12-6Z" stroke="#fff" stroke-width="3"/><path d="M28 18v20l-12-6" stroke="#fff" stroke-width="3"/><path d="M52 32H34" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M48 26l8 6-8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
-      { id: "cube-straight", label: "Würfelpfeil geradeaus", kind: "svg",
+      { id: "cube-straight", label: "Würfelpfeil geradeaus",
         svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M32 16l12 6v14l-12 6-12-6V22l12-6Z" stroke="#fff" stroke-width="3"/><path d="M32 16v20l12-6" stroke="#fff" stroke-width="3"/><path d="M32 10v14" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 14l6-8 6 8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
-      { id: "lamp", label: "Notleuchte", kind: "svg",
+      { id: "lamp", label: "Notleuchte",
         svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#0ea5e9"/><rect x="14" y="20" width="36" height="18" rx="4" fill="#fff"/><path d="M22 42h20l-2 6H24l-2-6Z" fill="#fff"/><path d="M32 10v6" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M20 14l4 4" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M44 14l-4 4" stroke="#fff" stroke-width="4" stroke-linecap="round"/></svg>` },
-      { id: "lamp-emergency", label: "Sicherheitsleuchte", kind: "svg",
+      { id: "lamp-emergency", label: "Sicherheitsleuchte",
         svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#f59e0b"/><path d="M16 32c0-8.8 7.2-16 16-16s16 7.2 16 16c0 6.3-3.7 11.8-9 14.3V50H25v-5.7c-5.3-2.5-9-8-9-14.3Z" fill="#fff"/><rect x="24" y="50" width="16" height="6" rx="2" fill="#fff"/></svg>` },
+
+      /* ✅ NEU: Abzweigdose (neutral) */
+      { id: "junction-box", label: "Abzweigdose",
+        svg: `<svg viewBox="0 0 64 64" fill="none">
+          <rect width="64" height="64" rx="6" fill="#64748b"/>
+          <rect x="16" y="16" width="32" height="32" rx="6" fill="#0f172a" stroke="#ffffff" stroke-width="3"/>
+          <circle cx="32" cy="32" r="4" fill="#ffffff"/>
+          <path d="M32 22v20M22 32h20" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+        </svg>` },
     ];
+
+    function setToolNone() {
+      state.activeSymbol = null;
+      document.querySelectorAll(".symbol-btn").forEach(btn => btn.classList.remove("active"));
+      toolStatus.textContent = "Werkzeug: keines";
+      saveState();
+    }
+
+    function setActiveSymbol(id) {
+      state.activeSymbol = id;
+      document.querySelectorAll(".symbol-btn").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.symbol === id);
+      });
+      const def = symbolDefs.find(s => s.id === id);
+      toolStatus.textContent = def ? `Werkzeug: ${def.label}` : "Werkzeug: Symbol";
+      saveState();
+    }
 
     function saveState() {
       const data = {
@@ -436,7 +379,8 @@
         symbols: state.symbols,
         projectName: state.projectName,
         bgName: state.bgName,
-        textDefault: state.textDefault,
+        bgLastModified: state.bgLastModified,
+        activeSymbol: state.activeSymbol,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     }
@@ -451,20 +395,13 @@
         state.symbols = Array.isArray(data.symbols) ? data.symbols : [];
         state.projectName = data.projectName || "";
         state.bgName = data.bgName || "";
-        state.textDefault = data.textDefault || state.textDefault;
+        state.bgLastModified = data.bgLastModified || 0;
+        state.activeSymbol = data.activeSymbol || null;
 
         projectName.value = state.projectName;
-        textDefault.value = state.textDefault;
       } catch {
         localStorage.removeItem(STORAGE_KEY);
       }
-    }
-
-    function setActiveSymbol(id) {
-      state.activeSymbol = id;
-      document.querySelectorAll(".symbol-btn").forEach(btn => {
-        btn.classList.toggle("active", btn.dataset.symbol === id);
-      });
     }
 
     function renderSymbolButtons() {
@@ -483,6 +420,9 @@
         });
         symbolGrid.appendChild(btn);
       });
+
+      if (state.activeSymbol) setActiveSymbol(state.activeSymbol);
+      else setToolNone();
     }
 
     function updateStatus() {
@@ -510,6 +450,9 @@
         symbolRotate.value = item.rotation;
         symbolCircuit.value = item.circuit || "";
         symbolNote.value = item.note || "";
+      } else {
+        symbolCircuit.value = "";
+        symbolNote.value = "";
       }
       renderOverlay();
       saveState();
@@ -701,7 +644,7 @@
         const pdf = await pdfjsLib.getDocument({ data }).promise;
         state.pdfDoc = pdf;
         state.pageCount = pdf.numPages;
-        state.pageNum = 1;
+        state.pageNum = Math.min(Math.max(1, state.pageNum), state.pageCount);
         await renderPdfPage(pdf, state.pageNum);
       } catch {
         projectStatus.textContent = "PDF konnte nicht geladen werden. Datei prüfen oder neu versuchen.";
@@ -709,7 +652,6 @@
     }
 
     async function loadImageFile(file) {
-      // alte URL freigeben
       if (state.imageUrl) URL.revokeObjectURL(state.imageUrl);
 
       state.bgType = "image";
@@ -750,10 +692,8 @@
       if (!file) return;
 
       state.bgName = file.name;
+      state.bgLastModified = file.lastModified || Date.now();
       state.selectedId = null;
-
-      // Symbole nicht löschen – bleiben projektweit; wenn du bei neuem Plan leeren willst, sag Bescheid.
-      // state.symbols = [];
 
       const type = (file.type || "").toLowerCase();
 
@@ -808,7 +748,7 @@
 
     function placeSymbolAt(clientX, clientY) {
       if (!state.activeSymbol) return;
-      if (!state.pageCount) return; // kein Plan geladen
+      if (!state.pageCount) return;
 
       const rect = overlay.getBoundingClientRect();
       const scale = state.scale;
@@ -827,13 +767,17 @@
         size,
         rotation: Number(symbolRotate.value),
         page: state.pageNum,
-        circuit: state.textDefault,
+
+        circuit: "", // ✅ kein Standard
         note: ""
       };
 
       state.symbols.push(symbol);
       selectSymbol(id);
       saveState();
+
+      // ✅ nach Platzieren automatisch Werkzeug aus (verhindert "aus Versehen")
+      setToolNone();
     }
 
     overlay.addEventListener("click", (event) => {
@@ -841,6 +785,8 @@
         placeSymbolAt(event.clientX, event.clientY);
       } else {
         state.selectedId = null;
+        symbolCircuit.value = "";
+        symbolNote.value = "";
         renderOverlay();
         saveState();
       }
@@ -859,11 +805,18 @@
       if (!state.selectedId) return;
       state.symbols = state.symbols.filter(s => s.id !== state.selectedId);
       state.selectedId = null;
+      symbolCircuit.value = "";
+      symbolNote.value = "";
       renderOverlay();
       saveState();
     });
 
     document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setToolNone();
+        return;
+      }
       if (!state.selectedId) return;
       if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault();
@@ -873,11 +826,6 @@
 
     symbolSize.addEventListener("input", updateSelectedSymbol);
     symbolRotate.addEventListener("input", updateSelectedSymbol);
-
-    textDefault.addEventListener("input", () => {
-      state.textDefault = textDefault.value;
-      saveState();
-    });
 
     symbolCircuit.addEventListener("input", () => {
       const item = state.symbols.find(s => s.id === state.selectedId);
@@ -894,6 +842,8 @@
       saveState();
       renderOverlay();
     });
+
+    btnToolNone.addEventListener("click", () => setToolNone());
 
     function svgToImage(svgMarkup) {
       return new Promise((resolve) => {
@@ -948,13 +898,16 @@
       link.click();
     });
 
+    // ✅ Beim Schließen nochmal speichern (zusätzlich zu den laufenden saveState() Calls)
+    window.addEventListener("beforeunload", () => {
+      saveState();
+    });
+
     function init() {
-      renderSymbolButtons();
       loadState();
+      renderSymbolButtons();
 
       zoomRange.value = state.scale * 100;
-      textDefault.value = state.textDefault;
-
       state.pdfjsReady = !!window.pdfjsLib;
       updateStatus();
 
