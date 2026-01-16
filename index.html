@@ -213,6 +213,17 @@
       width:100%;
       height:100%;
     }
+    .overlay-text{
+      min-width:80px;
+      padding:4px 8px;
+      border-radius:6px;
+      background:rgba(15,23,42,0.8);
+      border:1px solid #334155;
+      color:#f8fafc;
+      font-weight:600;
+      white-space:nowrap;
+      cursor:text;
+    }
     .status{
       font-size:12px;
       color:var(--muted);
@@ -263,6 +274,8 @@
         <input id="symbolSize" type="range" min="18" max="80" value="36">
         <label for="symbolRotate">Rotation</label>
         <input id="symbolRotate" type="range" min="0" max="360" value="0">
+        <label for="textDefault">Text (Stromkreis)</label>
+        <input id="textDefault" type="text" value="Stromkreis A">
         <button class="btn secondary" id="btnDelete" disabled>Auswahl löschen</button>
       </div>
       <hr style="border-color:var(--line);margin:12px 0">
@@ -273,7 +286,7 @@
         3. Symbole lassen sich per Drag & Drop mit Stift/Maus verschieben.<br>
         4. Auswahl anklicken, Größe/Rotation anpassen.<br>
         5. Änderungen werden lokal gespeichert (Tablet-freundlich).<br>
-        Tipp: Auswahl per <kbd>Entf</kbd>/<kbd>Backspace</kbd> löschen.
+        Text: Doppelklick zum Bearbeiten, <kbd>Enter</kbd> beendet die Eingabe.
       </p>
     </section>
 
@@ -321,6 +334,7 @@
     const symbolGrid = document.getElementById("symbolGrid");
     const symbolSize = document.getElementById("symbolSize");
     const symbolRotate = document.getElementById("symbolRotate");
+    const textDefault = document.getElementById("textDefault");
     const btnDelete = document.getElementById("btnDelete");
 
     const STORAGE_KEY = "sibe_planner_state_v1";
@@ -335,38 +349,62 @@
       selectedId: null,
       projectName: "",
       pdfjsReady: false,
+      textDefault: "Stromkreis A",
     };
 
     const symbolDefs = [
       {
         id: "exit-left",
         label: "Rettungszeichen links",
-        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="8" fill="#16a34a"/><path d="M45 20H29v8h10l-4 6-6-8H19l10 14-4 6 5 4 10-14h5v-16Z" fill="#fff"/><path d="M18 32h16" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M22 26l-8 6 8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+        kind: "svg",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M36 16h10v32H36v-8h6V24h-6v-8Z" fill="#fff"/><path d="M26 26c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3Z" fill="#fff"/><path d="M20 42l4-10 6 4 4 8-4 2-3-6-2 4h-5Z" fill="#fff"/><path d="M12 32h18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M16 26l-8 6 8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
       },
       {
         id: "exit-right",
         label: "Rettungszeichen rechts",
-        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="8" fill="#16a34a"/><path d="M19 20h16v8H25l4 6 6-8h10L35 40l4 6-5 4-10-14h-5V20Z" fill="#fff"/><path d="M46 32H30" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M42 26l8 6-8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+        kind: "svg",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M28 16H18v32h10v-8h-6V24h6v-8Z" fill="#fff"/><path d="M38 26c-1.7 0-3-1.3-3-3s1.3-3 3-3 3 1.3 3 3-1.3 3-3 3Z" fill="#fff"/><path d="M44 42l-4-10-6 4-4 8 4 2 3-6 2 4h5Z" fill="#fff"/><path d="M52 32H34" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M48 26l8 6-8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
       },
       {
-        id: "exit-up",
-        label: "Rettungszeichen oben",
-        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="8" fill="#16a34a"/><path d="M20 45V29h8v10l6-4-8-6v-10l14 10 6-4 4 5-14 10v5H20Z" fill="#fff"/><path d="M32 18v16" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 22l6-8 6 8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+        id: "exit-straight",
+        label: "Rettungszeichen geradeaus",
+        kind: "svg",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M16 42V32h8v6h16v-6h8v10H16Z" fill="#fff"/><path d="M32 20c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3Z" fill="#fff"/><path d="M24 30l4-6 8 6 4 10-5 2-3-8-3 4h-5Z" fill="#fff"/><path d="M32 12v18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 16l6-8 6 8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
       },
       {
-        id: "exit-down",
-        label: "Rettungszeichen unten",
-        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="8" fill="#16a34a"/><path d="M20 19v16h8V25l6 4-8 6v10l14-10 6 4 4-5-14-10v-5H20Z" fill="#fff"/><path d="M32 46V30" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 42l6 8 6-8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+        id: "cube-left",
+        label: "Würfelpfeil links",
+        kind: "svg",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M36 18l12 6v14l-12 6-12-6V24l12-6Z" stroke="#fff" stroke-width="3"/><path d="M36 18v20l12-6" stroke="#fff" stroke-width="3"/><path d="M12 32h18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M16 26l-8 6 8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+      },
+      {
+        id: "cube-right",
+        label: "Würfelpfeil rechts",
+        kind: "svg",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M28 18l-12 6v14l12 6 12-6V24l-12-6Z" stroke="#fff" stroke-width="3"/><path d="M28 18v20l-12-6" stroke="#fff" stroke-width="3"/><path d="M52 32H34" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M48 26l8 6-8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+      },
+      {
+        id: "cube-straight",
+        label: "Würfelpfeil geradeaus",
+        kind: "svg",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M32 16l12 6v14l-12 6-12-6V22l12-6Z" stroke="#fff" stroke-width="3"/><path d="M32 16v20l12-6" stroke="#fff" stroke-width="3"/><path d="M32 10v14" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 14l6-8 6 8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
       },
       {
         id: "lamp",
         label: "Notleuchte",
-        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="8" fill="#0ea5e9"/><path d="M16 30c0-8.8 7.2-16 16-16s16 7.2 16 16c0 6.3-3.7 11.8-9 14.3V50H25v-5.7c-5.3-2.5-9-8-9-14.3Z" fill="#fff"/><rect x="24" y="50" width="16" height="6" rx="2" fill="#fff"/></svg>`
+        kind: "svg",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#0ea5e9"/><rect x="14" y="20" width="36" height="18" rx="4" fill="#fff"/><path d="M22 42h20l-2 6H24l-2-6Z" fill="#fff"/><path d="M32 10v6" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M20 14l4 4" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M44 14l-4 4" stroke="#fff" stroke-width="4" stroke-linecap="round"/></svg>`
       },
       {
         id: "lamp-emergency",
         label: "Sicherheitsleuchte",
-        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="8" fill="#f59e0b"/><rect x="14" y="20" width="36" height="18" rx="4" fill="#fff"/><path d="M22 42h20l-2 6H24l-2-6Z" fill="#fff"/><path d="M32 10v6" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M20 14l4 4" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M44 14l-4 4" stroke="#fff" stroke-width="4" stroke-linecap="round"/></svg>`
+        kind: "svg",
+        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#f59e0b"/><path d="M16 32c0-8.8 7.2-16 16-16s16 7.2 16 16c0 6.3-3.7 11.8-9 14.3V50H25v-5.7c-5.3-2.5-9-8-9-14.3Z" fill="#fff"/><rect x="24" y="50" width="16" height="6" rx="2" fill="#fff"/></svg>`
+      },
+      {
+        id: "text-label",
+        label: "Text / Stromkreis",
+        kind: "text"
       }
     ];
 
@@ -377,6 +415,7 @@
         symbols: state.symbols,
         projectName: state.projectName,
         pdfName: state.pdfName,
+        textDefault: state.textDefault,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     }
@@ -391,7 +430,9 @@
         state.symbols = Array.isArray(data.symbols) ? data.symbols : [];
         state.projectName = data.projectName || "";
         state.pdfName = data.pdfName || "";
+        state.textDefault = data.textDefault || state.textDefault;
         projectName.value = state.projectName;
+        textDefault.value = state.textDefault;
       } catch (error) {
         localStorage.removeItem(STORAGE_KEY);
       }
@@ -450,7 +491,32 @@
         div.style.height = `${item.size * scale}px`;
         div.style.transform = `rotate(${item.rotation}deg)`;
         const def = symbolDefs.find(s => s.id === item.symbol);
-        div.innerHTML = def ? def.svg : "";
+        if (item.kind === "text" || def?.kind === "text") {
+          div.classList.add("overlay-text");
+          div.style.width = "auto";
+          div.style.height = "auto";
+          div.style.fontSize = `${item.size}px`;
+          div.textContent = item.text || state.textDefault;
+          div.setAttribute("contenteditable", "false");
+          div.addEventListener("dblclick", (event) => {
+            event.stopPropagation();
+            div.setAttribute("contenteditable", "true");
+            div.focus();
+          });
+          div.addEventListener("blur", () => {
+            div.setAttribute("contenteditable", "false");
+            item.text = div.textContent.trim() || state.textDefault;
+            saveState();
+          });
+          div.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              div.blur();
+            }
+          });
+        } else {
+          div.innerHTML = def ? def.svg : "";
+        }
         div.dataset.id = item.id;
         enableDrag(div);
         div.addEventListener("click", (event) => {
@@ -503,6 +569,9 @@
         saveState();
       };
       element.addEventListener("pointerdown", (event) => {
+        if (element.getAttribute("contenteditable") === "true") {
+          return;
+        }
         event.preventDefault();
         const item = state.symbols.find(s => s.id === element.dataset.id);
         if (!item) return;
@@ -603,14 +672,17 @@
       const x = (event.clientX - rect.left) / scale - size / 2;
       const y = (event.clientY - rect.top) / scale - size / 2;
       const id = `sym_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      const def = symbolDefs.find(s => s.id === state.activeSymbol);
       const symbol = {
         id,
         symbol: state.activeSymbol,
+        kind: def?.kind || "symbol",
         x: Math.max(0, x),
         y: Math.max(0, y),
         size,
         rotation: Number(symbolRotate.value),
         page: state.pageNum,
+        text: def?.kind === "text" ? state.textDefault : "",
       };
       state.symbols.push(symbol);
       selectSymbol(id);
@@ -635,6 +707,10 @@
 
     symbolSize.addEventListener("input", updateSelectedSymbol);
     symbolRotate.addEventListener("input", updateSelectedSymbol);
+    textDefault.addEventListener("input", () => {
+      state.textDefault = textDefault.value;
+      saveState();
+    });
 
     function svgToImage(svgMarkup) {
       return new Promise((resolve) => {
@@ -655,18 +731,28 @@
       const items = state.symbols.filter(item => item.page === state.pageNum);
       for (const item of items) {
         const def = symbolDefs.find(s => s.id === item.symbol);
-        if (!def) continue;
-        const temp = document.createElement("div");
-        temp.innerHTML = def.svg;
-        const svg = temp.firstChild;
-        const svgData = new XMLSerializer().serializeToString(svg);
-        const img = await svgToImage(svgData);
-        ctx.save();
-        ctx.translate(item.x + item.size / 2, item.y + item.size / 2);
-        ctx.rotate((Math.PI / 180) * item.rotation);
-        ctx.translate(-item.size / 2, -item.size / 2);
-        ctx.drawImage(img, 0, 0, item.size, item.size);
-        ctx.restore();
+        if (item.kind === "text" || def?.kind === "text") {
+          ctx.save();
+          ctx.translate(item.x + item.size / 2, item.y + item.size / 2);
+          ctx.rotate((Math.PI / 180) * item.rotation);
+          ctx.translate(-item.size / 2, -item.size / 2);
+          ctx.font = `${item.size}px system-ui,Segoe UI,Roboto,Arial,sans-serif`;
+          ctx.fillStyle = "#f8fafc";
+          ctx.fillText(item.text || state.textDefault, 0, item.size);
+          ctx.restore();
+        } else if (def) {
+          const temp = document.createElement("div");
+          temp.innerHTML = def.svg;
+          const svg = temp.firstChild;
+          const svgData = new XMLSerializer().serializeToString(svg);
+          const img = await svgToImage(svgData);
+          ctx.save();
+          ctx.translate(item.x + item.size / 2, item.y + item.size / 2);
+          ctx.rotate((Math.PI / 180) * item.rotation);
+          ctx.translate(-item.size / 2, -item.size / 2);
+          ctx.drawImage(img, 0, 0, item.size, item.size);
+          ctx.restore();
+        }
       }
       const link = document.createElement("a");
       link.download = `${state.projectName || "sicherheitsplan"}_seite_${state.pageNum}.png`;
@@ -678,6 +764,7 @@
       renderSymbolButtons();
       loadState();
       zoomRange.value = state.scale * 100;
+      textDefault.value = state.textDefault;
       state.pdfjsReady = !!window.pdfjsLib;
       updateStatus();
       setTimeout(() => {
