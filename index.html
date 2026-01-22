@@ -27,7 +27,6 @@
       background:var(--bg);
       touch-action:manipulation;
     }
-
     main{
       display:grid;
       grid-template-columns:240px 1fr;
@@ -44,7 +43,6 @@
       .canvas-toolbar{gap:10px}
       #overlay{touch-action:none}
     }
-
     .panel{
       background:var(--panel);
       border:1px solid var(--line);
@@ -52,14 +50,12 @@
       padding:12px;
     }
     .panel h2{font-size:14px;margin:0 0 8px 0;}
-
     .sidebar{
       position:sticky;
       top:12px;
       max-height:calc(100vh - 24px);
       overflow:auto;
     }
-
     .stack{display:flex;flex-direction:column;gap:8px}
     label{font-size:12px;color:var(--muted)}
     input[type="file"],input[type="text"],button,input[type="range"]{font:inherit;}
@@ -71,7 +67,6 @@
       background:var(--panel-2);
       color:var(--ink);
     }
-
     .btn{
       background:var(--accent);
       color:var(--accent-ink);
@@ -169,7 +164,7 @@
     .mini{font-size:11px;color:var(--muted);line-height:1.35;}
   </style>
 
-  <!-- PDF.js nur für PDF (Bilder funktionieren offline) -->
+  <!-- PDF.js nur für PDF (Bilder funktionieren offline). -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
 </head>
 
@@ -185,6 +180,10 @@
         <input id="projectName" type="text" placeholder="z. B. Werkhalle Nord" />
 
         <div class="status" id="projectStatus">Kein Plan geladen.</div>
+        <div class="mini">
+          Hinweis: Aus Datenschutzgründen wird die Datei selbst nicht gespeichert. Nach erneutem Öffnen bitte Plan wieder auswählen –
+          deine gesetzten Symbole bleiben gespeichert.
+        </div>
       </div>
 
       <hr style="border-color:var(--line);margin:12px 0" />
@@ -193,7 +192,7 @@
       <div class="stack" style="margin-bottom:10px">
         <button class="btn secondary" id="btnToolNone">✋ Auswahl aus / Maus</button>
         <div class="status" id="toolStatus">Werkzeug: keines</div>
-        <div class="mini">Tipp: <kbd>Esc</kbd> = Werkzeug aus. (Dann platzierst du nichts aus Versehen.)</div>
+        <div class="mini">Tipp: <kbd>Esc</kbd> = Werkzeug aus. Klick auf aktives Symbol = abwählen.</div>
       </div>
 
       <h2>Symbole</h2>
@@ -215,23 +214,18 @@
         <input id="symbolNote" type="text" placeholder="z. B. über Tor 2" />
 
         <button class="btn secondary" id="btnDelete" disabled>Auswahl löschen</button>
-
-        <div class="mini">
-          Symbol anklicken = auswählen. Ziehen = verschieben.<br>
-          Felder links ändern nur das ausgewählte Symbol.
-        </div>
+        <div class="mini">Wichtig: Backspace/Delete in den Feldern löscht nur Text – nicht das Symbol.</div>
       </div>
 
       <hr style="border-color:var(--line);margin:12px 0" />
 
       <h2>Hinweise</h2>
       <p class="legend">
-        1. PDF oder Bild laden.<br />
+        1. Plan laden (PDF oder Bild).<br />
         2. Symbol auswählen → im Plan klicken = platzieren.<br />
-        3. Danach wird das Werkzeug automatisch deaktiviert.<br />
-        4. Export: PNG bleibt korrekt, auch wenn du reingezoomt hast.<br />
-        5. Alles wird lokal gespeichert (beim Schließen später weiterarbeiten).<br />
-        <span class="mini">PDF braucht pdf.js (CDN). Bilder funktionieren offline.</span>
+        3. Danach wird Werkzeug automatisch deaktiviert (kein Versehen).<br />
+        4. Symbol anklicken → links bearbeiten / ziehen zum Verschieben.<br />
+        5. PNG-Export bleibt korrekt, auch bei Zoom.<br />
       </p>
     </section>
 
@@ -257,8 +251,8 @@
         <div class="empty-state" id="emptyState">
           <div>
             <strong>Kein Plan geladen</strong>
-            <span id="emptyHintPrimary">Bitte links eine PDF oder ein Bild auswählen.</span>
-            <span id="emptyHintSecondary">Wenn PDF schwarz bleibt: Internetzugang prüfen (pdf.js CDN).</span>
+            <span>Bitte links eine PDF oder ein Bild auswählen.</span>
+            <span class="mini">Wenn PDF schwarz bleibt: Internetzugang prüfen (pdf.js CDN).</span>
           </div>
         </div>
       </div>
@@ -266,6 +260,7 @@
   </main>
 
   <script>
+    // ===== DOM =====
     const fileInput = document.getElementById("fileInput");
     const projectName = document.getElementById("projectName");
     const projectStatus = document.getElementById("projectStatus");
@@ -273,7 +268,6 @@
     const pdfCanvas = document.getElementById("pdfCanvas");
     const overlay = document.getElementById("overlay");
     const emptyState = document.getElementById("emptyState");
-    const emptyHintSecondary = document.getElementById("emptyHintSecondary");
 
     const btnPrev = document.getElementById("btnPrev");
     const btnNext = document.getElementById("btnNext");
@@ -291,12 +285,14 @@
     const btnToolNone = document.getElementById("btnToolNone");
     const toolStatus = document.getElementById("toolStatus");
 
-    const STORAGE_KEY = "sibe_planner_state_v6";
-
+    // ===== State =====
+    const STORAGE_KEY = "sibe_planner_state_v7";
     const state = {
       bgType: null,         // "pdf" | "image"
       bgName: "",
-      bgLastModified: 0,
+      pageNum: 1,
+      pageCount: 0,
+      scale: 1,
 
       pdfData: null,
       pdfDoc: null,
@@ -306,18 +302,15 @@
       imageNaturalW: 0,
       imageNaturalH: 0,
 
-      pageNum: 1,
-      pageCount: 0,
-      scale: 1,
-
       activeSymbol: null,
-      symbols: [],
       selectedId: null,
+      symbols: [],
 
       projectName: "",
       pdfjsReady: false,
     };
 
+    // ===== Symbols =====
     const symbolDefs = [
       // Rettungszeichen
       { id: "exit-left", label: "Rettungszeichen links",
@@ -330,14 +323,6 @@
         svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M16 14h32v10H16V14Z" fill="#fff"/><path d="M32 40c1.7 0 3 1.3 3 3s-1.3 3-3 3-3-1.3-3-3 1.3-3 3-3Z" fill="#fff"/><path d="M24 30l4 6 8-6 4-8-5-2-3 8-3-4h-5Z" fill="#fff"/><path d="M32 52V34" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 48l6 8 6-8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
       { id: "exit-straight", label: "Rettungszeichen geradeaus",
         svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M16 42V32h8v6h16v-6h8v10H16Z" fill="#fff"/><path d="M32 20c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3Z" fill="#fff"/><path d="M24 30l4-6 8 6 4 10-5 2-3-8-3 4h-5Z" fill="#fff"/><path d="M32 12v18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 16l6-8 6 8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
-
-      // Würfel (optional)
-      { id: "cube-left", label: "Würfelpfeil links",
-        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M36 18l12 6v14l-12 6-12-6V24l12-6Z" stroke="#fff" stroke-width="3"/><path d="M36 18v20l12-6" stroke="#fff" stroke-width="3"/><path d="M12 32h18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M16 26l-8 6 8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
-      { id: "cube-right", label: "Würfelpfeil rechts",
-        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M28 18l-12 6v14l12 6 12-6V24l-12-6Z" stroke="#fff" stroke-width="3"/><path d="M28 18v20l-12-6" stroke="#fff" stroke-width="3"/><path d="M52 32H34" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M48 26l8 6-8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
-      { id: "cube-straight", label: "Würfelpfeil geradeaus",
-        svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M32 16l12 6v14l-12 6-12-6V22l12-6Z" stroke="#fff" stroke-width="3"/><path d="M32 16v20l12-6" stroke="#fff" stroke-width="3"/><path d="M32 10v14" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 14l6-8 6 8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
 
       // Leuchten
       { id: "lamp", label: "Notleuchte",
@@ -354,7 +339,7 @@
           <path d="M32 22v20M22 32h20" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
         </svg>` },
 
-      // ✅ NEU: Feuerlöscher
+      // Feuerlöscher
       { id: "fire-extinguisher", label: "Feuerlöscher",
         svg: `<svg viewBox="0 0 64 64" fill="none">
           <rect width="64" height="64" rx="6" fill="#ef4444"/>
@@ -367,13 +352,43 @@
         </svg>` },
     ];
 
+    // ===== Helpers =====
     function isTypingInField() {
       const el = document.activeElement;
       if (!el) return false;
       const tag = (el.tagName || "").toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return true;
-      if (el.isContentEditable) return true;
-      return false;
+      return tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable === true;
+    }
+
+    function saveState() {
+      const data = {
+        bgName: state.bgName,
+        pageNum: state.pageNum,
+        scale: state.scale,
+        symbols: state.symbols,
+        activeSymbol: state.activeSymbol,
+        selectedId: state.selectedId,
+        projectName: state.projectName,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    function loadState() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      try {
+        const data = JSON.parse(raw);
+        state.bgName = data.bgName || "";
+        state.pageNum = data.pageNum || 1;
+        state.scale = typeof data.scale === "number" ? data.scale : 1;
+        state.symbols = Array.isArray(data.symbols) ? data.symbols : [];
+        state.activeSymbol = data.activeSymbol || null;
+        state.selectedId = data.selectedId || null;
+        state.projectName = data.projectName || "";
+        projectName.value = state.projectName;
+      } catch {
+        localStorage.removeItem(STORAGE_KEY);
+      }
     }
 
     function setToolNone() {
@@ -383,7 +398,7 @@
       saveState();
     }
 
-    // ✅ Toggle: Klick auf aktives Symbol = abwählen
+    // Klick auf aktives Symbol => abwählen
     function setActiveSymbol(id) {
       if (state.activeSymbol === id) {
         setToolNone();
@@ -398,39 +413,6 @@
       saveState();
     }
 
-    function saveState() {
-      const data = {
-        bgName: state.bgName,
-        bgLastModified: state.bgLastModified,
-        pageNum: state.pageNum,
-        scale: state.scale,
-        symbols: state.symbols,
-        selectedId: state.selectedId,
-        activeSymbol: state.activeSymbol,
-        projectName: state.projectName,
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    }
-
-    function loadState() {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      try {
-        const data = JSON.parse(raw);
-        state.bgName = data.bgName || "";
-        state.bgLastModified = data.bgLastModified || 0;
-        state.pageNum = data.pageNum || 1;
-        state.scale = typeof data.scale === "number" ? data.scale : 1;
-        state.symbols = Array.isArray(data.symbols) ? data.symbols : [];
-        state.selectedId = data.selectedId || null;
-        state.activeSymbol = data.activeSymbol || null;
-        state.projectName = data.projectName || "";
-        projectName.value = state.projectName;
-      } catch {
-        localStorage.removeItem(STORAGE_KEY);
-      }
-    }
-
     function renderSymbolButtons() {
       symbolGrid.innerHTML = "";
       symbolDefs.forEach(def => {
@@ -439,8 +421,9 @@
         btn.className = "symbol-btn";
         btn.dataset.symbol = def.id;
         btn.innerHTML = `${def.svg}<span>${def.label}</span>`;
+
+        // ✅ NUR click (kein pointerdown), damit nicht doppelt toggelt
         btn.addEventListener("click", () => setActiveSymbol(def.id));
-        btn.addEventListener("pointerdown", () => setActiveSymbol(def.id));
 
         btn.setAttribute("draggable", "true");
         btn.addEventListener("dragstart", (event) => {
@@ -450,31 +433,31 @@
         symbolGrid.appendChild(btn);
       });
 
-      if (state.activeSymbol) {
-        // setzt active styles + status
-        const id = state.activeSymbol;
-        state.activeSymbol = null;
-        setActiveSymbol(id);
-      } else {
-        setToolNone();
-      }
+      if (state.activeSymbol) setActiveSymbol(state.activeSymbol);
+      else setToolNone();
     }
 
     function updateStatus() {
+      const planLoaded = !!state.pageCount;
+
       if (state.bgType === "pdf" && !state.pdfjsReady) {
-        projectStatus.textContent = "PDF.js konnte nicht geladen werden. Bitte Internetzugang prüfen.";
-        emptyHintSecondary.textContent = "Ohne PDF.js kann PDF nicht gerendert werden (Bilder funktionieren trotzdem).";
+        projectStatus.textContent = "PDF.js konnte nicht geladen werden. PDF ggf. nicht sichtbar (Bilder funktionieren).";
       } else {
-        projectStatus.textContent = state.bgName ? `Plan geladen: ${state.bgName}` : "Kein Plan geladen.";
-        emptyHintSecondary.textContent = "Wenn PDF schwarz bleibt: Internetzugang prüfen (pdf.js CDN).";
+        projectStatus.textContent = state.bgName ? `Plan: ${state.bgName}` : "Kein Plan geladen.";
       }
 
       pageStatus.textContent = `Seite ${state.pageNum} / ${state.pageCount}`;
       btnPrev.disabled = state.pageNum <= 1;
       btnNext.disabled = state.pageNum >= state.pageCount;
-      btnExport.disabled = !state.pageCount;
-      emptyState.style.display = state.pageCount ? "none" : "flex";
+      btnExport.disabled = !planLoaded;
+      emptyState.style.display = planLoaded ? "none" : "flex";
       btnDelete.disabled = !state.selectedId;
+
+      const sel = state.symbols.find(s => s.id === state.selectedId);
+      symbolCircuit.disabled = !sel;
+      symbolNote.disabled = !sel;
+      symbolSize.disabled = !sel;
+      symbolRotate.disabled = !sel;
     }
 
     function selectSymbol(id) {
@@ -493,7 +476,15 @@
       saveState();
     }
 
-    function updateSelectedSymbol() {
+    function clearSelection() {
+      state.selectedId = null;
+      symbolCircuit.value = "";
+      symbolNote.value = "";
+      renderOverlay();
+      saveState();
+    }
+
+    function updateSelectedSymbolSizing() {
       const item = state.symbols.find(s => s.id === state.selectedId);
       if (!item) return;
       item.size = Number(symbolSize.value);
@@ -502,6 +493,7 @@
       saveState();
     }
 
+    // ===== Overlay render =====
     function enableDrag(element) {
       let startX = 0, startY = 0, originX = 0, originY = 0, dragging = false;
 
@@ -517,6 +509,7 @@
         item.x = Math.max(0, originX + dx / scale);
         item.y = Math.max(0, originY + dy / scale);
 
+        // schnell visuell updaten
         element.style.left = `${item.x * scale}px`;
         element.style.top = `${item.y * scale}px`;
       };
@@ -626,6 +619,7 @@
       updateStatus();
     }
 
+    // ===== Rendering background =====
     async function renderPdfPage(pdf, pageNum) {
       const page = await pdf.getPage(pageNum);
       const viewport = page.getViewport({ scale: state.scale });
@@ -683,7 +677,7 @@
         state.pageNum = Math.min(Math.max(1, state.pageNum), state.pageCount);
         await renderPdfPage(pdf, state.pageNum);
       } catch {
-        projectStatus.textContent = "PDF konnte nicht geladen werden. Datei prüfen oder neu versuchen.";
+        projectStatus.textContent = "PDF konnte nicht geladen werden. Datei prüfen.";
       }
     }
 
@@ -707,32 +701,123 @@
         state.imageNaturalH = img.naturalHeight || img.height;
         renderImage();
       };
-      img.onerror = () => {
-        projectStatus.textContent = "Bild konnte nicht geladen werden. Datei prüfen oder neu versuchen.";
-      };
+      img.onerror = () => { projectStatus.textContent = "Bild konnte nicht geladen werden."; };
       img.src = url;
     }
 
     async function renderCurrent() {
-      if (state.bgType === "pdf" && state.pdfDoc) {
-        await renderPdfPage(state.pdfDoc, state.pageNum);
-      } else if (state.bgType === "image" && state.imageEl) {
-        renderImage();
-      } else {
-        updateStatus();
-      }
+      if (state.bgType === "pdf" && state.pdfDoc) return renderPdfPage(state.pdfDoc, state.pageNum);
+      if (state.bgType === "image" && state.imageEl) return renderImage();
+      updateStatus();
     }
 
+    // ===== Placement =====
+    function placeSymbolAt(clientX, clientY) {
+      if (!state.activeSymbol) return;
+      if (!state.pageCount) return;
+
+      const rect = overlay.getBoundingClientRect();
+      const scale = state.scale;
+      const size = Number(symbolSize.value);
+
+      const x = (clientX - rect.left) / scale - size / 2;
+      const y = (clientY - rect.top) / scale - size / 2;
+
+      const id = `sym_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      const symbol = {
+        id,
+        symbol: state.activeSymbol,
+        x: Math.max(0, x),
+        y: Math.max(0, y),
+        size,
+        rotation: Number(symbolRotate.value),
+        page: state.pageNum,
+        circuit: "",
+        note: ""
+      };
+
+      state.symbols.push(symbol);
+      selectSymbol(id);
+      saveState();
+
+      // ✅ nach Platzieren Werkzeug aus
+      setToolNone();
+    }
+
+    // ===== Export =====
+    function svgToImage(svgMarkup) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgMarkup)))}`;
+      });
+    }
+
+    async function exportPNG() {
+      if (!state.pageCount) return;
+
+      const exportCanvas = document.createElement("canvas");
+      const ctx = exportCanvas.getContext("2d");
+
+      // Hintergrund immer in scale=1 rendern (damit nichts verschoben ist)
+      if (state.bgType === "pdf" && state.pdfDoc) {
+        const page = await state.pdfDoc.getPage(state.pageNum);
+        const viewport = page.getViewport({ scale: 1 });
+        exportCanvas.width = viewport.width;
+        exportCanvas.height = viewport.height;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+      } else if (state.bgType === "image" && state.imageEl) {
+        exportCanvas.width = state.imageNaturalW;
+        exportCanvas.height = state.imageNaturalH;
+        ctx.drawImage(state.imageEl, 0, 0);
+      } else {
+        return;
+      }
+
+      const items = state.symbols.filter(s => s.page === state.pageNum);
+
+      for (const item of items) {
+        const def = symbolDefs.find(s => s.id === item.symbol);
+        if (!def) continue;
+
+        const temp = document.createElement("div");
+        temp.innerHTML = def.svg;
+        const svg = temp.firstChild;
+        const svgData = new XMLSerializer().serializeToString(svg);
+        const img = await svgToImage(svgData);
+
+        ctx.save();
+        ctx.translate(item.x + item.size / 2, item.y + item.size / 2);
+        ctx.rotate((Math.PI / 180) * item.rotation);
+        ctx.translate(-item.size / 2, -item.size / 2);
+        ctx.drawImage(img, 0, 0, item.size, item.size);
+        ctx.restore();
+
+        const circuitText = (item.circuit || "").trim();
+        if (circuitText) {
+          ctx.save();
+          ctx.font = `${Math.max(10, Math.round(item.size * 0.45))}px system-ui,Segoe UI,Roboto,Arial,sans-serif`;
+          ctx.fillStyle = "#ffffff";
+          ctx.fillText(circuitText, item.x, item.y + item.size + 16);
+          ctx.restore();
+        }
+      }
+
+      const link = document.createElement("a");
+      link.download = `${(state.projectName || "sicherheitsplan")}_seite_${state.pageNum}.png`;
+      link.href = exportCanvas.toDataURL("image/png");
+      link.click();
+    }
+
+    // ===== Events =====
     fileInput.addEventListener("change", async (event) => {
       const file = event.target.files[0];
       if (!file) return;
 
       state.bgName = file.name;
-      state.bgLastModified = file.lastModified || Date.now();
       state.selectedId = null;
 
       const type = (file.type || "").toLowerCase();
-
       if (type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
         const arrayBuffer = await file.arrayBuffer();
         state.pdfData = new Uint8Array(arrayBuffer);
@@ -740,14 +825,13 @@
         saveState();
         return;
       }
-
       if (type.startsWith("image/")) {
         await loadImageFile(file);
         saveState();
         return;
       }
 
-      projectStatus.textContent = "Unbekannter Dateityp. Bitte PDF oder Bild (JPG/PNG/WebP) wählen.";
+      projectStatus.textContent = "Unbekannter Dateityp. Bitte PDF oder Bild wählen.";
     });
 
     projectName.addEventListener("input", () => {
@@ -782,48 +866,24 @@
       saveState();
     });
 
-    function placeSymbolAt(clientX, clientY) {
-      if (!state.activeSymbol) return;
-      if (!state.pageCount) return;
+    btnExport.addEventListener("click", exportPNG);
 
-      const rect = overlay.getBoundingClientRect();
-      const scale = state.scale;
-      const size = Number(symbolSize.value);
-
-      const x = (clientX - rect.left) / scale - size / 2;
-      const y = (clientY - rect.top) / scale - size / 2;
-
-      const id = `sym_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-
-      const symbol = {
-        id,
-        symbol: state.activeSymbol,
-        x: Math.max(0, x),
-        y: Math.max(0, y),
-        size,
-        rotation: Number(symbolRotate.value),
-        page: state.pageNum,
-        circuit: "",   // kein Standard
-        note: ""
-      };
-
-      state.symbols.push(symbol);
-      selectSymbol(id);
+    btnDelete.addEventListener("click", () => {
+      if (!state.selectedId) return;
+      state.symbols = state.symbols.filter(s => s.id !== state.selectedId);
+      clearSelection();
       saveState();
+      renderOverlay();
+    });
 
-      // ✅ nach Platzieren Werkzeug aus (verhindert Fehlklicks)
-      setToolNone();
-    }
+    btnToolNone.addEventListener("click", setToolNone);
 
     overlay.addEventListener("click", (event) => {
       if (state.activeSymbol) {
         placeSymbolAt(event.clientX, event.clientY);
       } else {
-        state.selectedId = null;
-        symbolCircuit.value = "";
-        symbolNote.value = "";
-        renderOverlay();
-        saveState();
+        // nur abwählen, wenn man nicht auf ein Symbol geklickt hat (Symbol stopPropagation macht das)
+        clearSelection();
       }
     });
 
@@ -836,37 +896,8 @@
       placeSymbolAt(event.clientX, event.clientY);
     });
 
-    btnDelete.addEventListener("click", () => {
-      if (!state.selectedId) return;
-      state.symbols = state.symbols.filter(s => s.id !== state.selectedId);
-      state.selectedId = null;
-      symbolCircuit.value = "";
-      symbolNote.value = "";
-      renderOverlay();
-      saveState();
-    });
-
-    // ✅ Fix: Backspace/Delete im Eingabefeld löscht NICHT das Symbol
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        setToolNone();
-        return;
-      }
-
-      // Wenn man tippt: nix global abfangen
-      if (isTypingInField()) return;
-
-      if (!state.selectedId) return;
-
-      if (event.key === "Delete" || event.key === "Backspace") {
-        event.preventDefault();
-        btnDelete.click();
-      }
-    });
-
-    symbolSize.addEventListener("input", updateSelectedSymbol);
-    symbolRotate.addEventListener("input", updateSelectedSymbol);
+    symbolSize.addEventListener("input", updateSelectedSymbolSizing);
+    symbolRotate.addEventListener("input", updateSelectedSymbolSizing);
 
     symbolCircuit.addEventListener("input", () => {
       const item = state.symbols.find(s => s.id === state.selectedId);
@@ -884,87 +915,43 @@
       renderOverlay();
     });
 
-    btnToolNone.addEventListener("click", () => setToolNone());
-
-    function svgToImage(svgMarkup) {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgMarkup)))}`;
-      });
-    }
-
-    // ✅ PNG Export FIX: Export rendert IMMER in Basisgröße (scale=1) -> nichts verschoben
-    btnExport.addEventListener("click", async () => {
-      if (!state.pageCount) return;
-
-      const exportCanvas = document.createElement("canvas");
-      const ctx = exportCanvas.getContext("2d");
-
-      // Hintergrund in scale=1 neu rendern
-      if (state.bgType === "pdf") {
-        const page = await state.pdfDoc.getPage(state.pageNum);
-        const viewport = page.getViewport({ scale: 1 });
-        exportCanvas.width = viewport.width;
-        exportCanvas.height = viewport.height;
-        await page.render({ canvasContext: ctx, viewport }).promise;
-      } else if (state.bgType === "image") {
-        exportCanvas.width = state.imageNaturalW;
-        exportCanvas.height = state.imageNaturalH;
-        ctx.drawImage(state.imageEl, 0, 0);
-      } else {
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setToolNone();
         return;
       }
 
-      // Symbole ohne Zoom-Faktor zeichnen
-      const items = state.symbols.filter(s => s.page === state.pageNum);
-      for (const item of items) {
-        const def = symbolDefs.find(s => s.id === item.symbol);
-        if (!def) continue;
+      // ✅ Fix: keine Symbol-Löschung während man in Inputs tippt
+      if (isTypingInField()) return;
 
-        const temp = document.createElement("div");
-        temp.innerHTML = def.svg;
-        const svg = temp.firstChild;
-        const svgData = new XMLSerializer().serializeToString(svg);
-        const img = await svgToImage(svgData);
+      if (!state.selectedId) return;
 
-        ctx.save();
-        ctx.translate(item.x + item.size / 2, item.y + item.size / 2);
-        ctx.rotate((Math.PI / 180) * item.rotation);
-        ctx.translate(-item.size / 2, -item.size / 2);
-        ctx.drawImage(img, 0, 0, item.size, item.size);
-        ctx.restore();
-
-        const circuitText = (item.circuit || "").trim();
-        if (circuitText) {
-          ctx.save();
-          ctx.font = `${Math.max(10, Math.round(item.size * 0.45))}px system-ui,Segoe UI,Roboto,Arial,sans-serif`;
-          ctx.fillStyle = "#ffffff";
-          ctx.fillText(circuitText, item.x, item.y + item.size + 16);
-          ctx.restore();
-        }
+      if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        btnDelete.click();
       }
-
-      const link = document.createElement("a");
-      link.download = `${state.projectName || "sicherheitsplan"}_seite_${state.pageNum}.png`;
-      link.href = exportCanvas.toDataURL("image/png");
-      link.click();
     });
 
-    window.addEventListener("beforeunload", () => saveState());
+    window.addEventListener("beforeunload", saveState);
 
+    // ===== Init =====
     function init() {
       loadState();
       renderSymbolButtons();
 
-      zoomRange.value = state.scale * 100;
+      zoomRange.value = Math.round(state.scale * 100);
       state.pdfjsReady = !!window.pdfjsLib;
-      updateStatus();
 
+      // Start UI
+      updateStatus();
+      renderOverlay();
+
+      // pdfjs kann leicht später geladen sein
       setTimeout(() => {
         state.pdfjsReady = !!window.pdfjsLib;
         updateStatus();
-      }, 1500);
+      }, 1200);
     }
 
     init();
