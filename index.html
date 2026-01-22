@@ -180,9 +180,14 @@
         <input id="projectName" type="text" placeholder="z. B. Werkhalle Nord" />
 
         <div class="status" id="projectStatus">Kein Plan geladen.</div>
+
+        <button class="btn secondary" id="btnSaveProject">Projekt speichern (.json)</button>
+        <button class="btn secondary" id="btnLoadProject">Projekt laden (.json)</button>
+        <input id="projectFileInput" type="file" accept="application/json" style="display:none" />
+
         <div class="mini">
-          Hinweis: Aus Datenschutzgründen wird die Datei selbst nicht gespeichert. Nach erneutem Öffnen bitte Plan wieder auswählen –
-          deine gesetzten Symbole bleiben gespeichert.
+          Hinweis: Die PDF/JPG-Datei selbst wird nicht in der Projektdatei gespeichert. Beim Projekt-Laden bitte die passende
+          PDF/JPG erneut auswählen – Symbole/Beschriftungen bleiben erhalten.
         </div>
       </div>
 
@@ -214,7 +219,7 @@
         <input id="symbolNote" type="text" placeholder="z. B. über Tor 2" />
 
         <button class="btn secondary" id="btnDelete" disabled>Auswahl löschen</button>
-        <div class="mini">Wichtig: Backspace/Delete in den Feldern löscht nur Text – nicht das Symbol.</div>
+        <div class="mini">Backspace/Delete in den Feldern löscht nur Text – nicht das Symbol.</div>
       </div>
 
       <hr style="border-color:var(--line);margin:12px 0" />
@@ -285,11 +290,17 @@
     const btnToolNone = document.getElementById("btnToolNone");
     const toolStatus = document.getElementById("toolStatus");
 
+    const btnSaveProject = document.getElementById("btnSaveProject");
+    const btnLoadProject = document.getElementById("btnLoadProject");
+    const projectFileInput = document.getElementById("projectFileInput");
+
     // ===== State =====
-    const STORAGE_KEY = "sibe_planner_state_v7";
+    const STORAGE_KEY = "sibe_planner_state_v8";
     const state = {
       bgType: null,         // "pdf" | "image"
       bgName: "",
+      bgLastModified: 0,
+
       pageNum: 1,
       pageCount: 0,
       scale: 1,
@@ -363,6 +374,8 @@
     function saveState() {
       const data = {
         bgName: state.bgName,
+        bgLastModified: state.bgLastModified,
+        bgType: state.bgType,
         pageNum: state.pageNum,
         scale: state.scale,
         symbols: state.symbols,
@@ -379,6 +392,8 @@
       try {
         const data = JSON.parse(raw);
         state.bgName = data.bgName || "";
+        state.bgLastModified = data.bgLastModified || 0;
+        state.bgType = data.bgType || null;
         state.pageNum = data.pageNum || 1;
         state.scale = typeof data.scale === "number" ? data.scale : 1;
         state.symbols = Array.isArray(data.symbols) ? data.symbols : [];
@@ -422,7 +437,7 @@
         btn.dataset.symbol = def.id;
         btn.innerHTML = `${def.svg}<span>${def.label}</span>`;
 
-        // ✅ NUR click (kein pointerdown), damit nicht doppelt toggelt
+        // ✅ nur click (kein pointerdown) -> kein Doppel-Toggle
         btn.addEventListener("click", () => setActiveSymbol(def.id));
 
         btn.setAttribute("draggable", "true");
@@ -509,7 +524,6 @@
         item.x = Math.max(0, originX + dx / scale);
         item.y = Math.max(0, originY + dy / scale);
 
-        // schnell visuell updaten
         element.style.left = `${item.x * scale}px`;
         element.style.top = `${item.y * scale}px`;
       };
@@ -565,7 +579,7 @@
         const def = symbolDefs.find(s => s.id === item.symbol);
         div.innerHTML = def ? def.svg : "";
 
-        // Stromkreis immer sichtbar
+        // Stromkreis immer sichtbar (✅ Text schwarz)
         const circuitText = (item.circuit ?? "").trim();
         if (circuitText) {
           const cap = document.createElement("div");
@@ -574,9 +588,9 @@
           cap.style.top = "100%";
           cap.style.transform = "translate(-50%, 6px)";
           cap.style.fontSize = `${Math.max(10, Math.round(item.size * 0.45))}px`;
-          cap.style.color = "#e2e8f0";
-          cap.style.background = "rgba(15,23,42,.75)";
-          cap.style.border = "1px solid #334155";
+          cap.style.color = "#000";
+          cap.style.background = "rgba(255,255,255,.88)";
+          cap.style.border = "1px solid #111";
           cap.style.padding = "2px 6px";
           cap.style.borderRadius = "6px";
           cap.style.whiteSpace = "nowrap";
@@ -740,11 +754,11 @@
       selectSymbol(id);
       saveState();
 
-      // ✅ nach Platzieren Werkzeug aus
+      // nach Platzieren Werkzeug aus
       setToolNone();
     }
 
-    // ===== Export =====
+    // ===== Export PNG =====
     function svgToImage(svgMarkup) {
       return new Promise((resolve) => {
         const img = new Image();
@@ -759,7 +773,7 @@
       const exportCanvas = document.createElement("canvas");
       const ctx = exportCanvas.getContext("2d");
 
-      // Hintergrund immer in scale=1 rendern (damit nichts verschoben ist)
+      // Hintergrund immer in scale=1 rendern (Zoom-unabhängig)
       if (state.bgType === "pdf" && state.pdfDoc) {
         const page = await state.pdfDoc.getPage(state.pageNum);
         const viewport = page.getViewport({ scale: 1 });
@@ -797,7 +811,7 @@
         if (circuitText) {
           ctx.save();
           ctx.font = `${Math.max(10, Math.round(item.size * 0.45))}px system-ui,Segoe UI,Roboto,Arial,sans-serif`;
-          ctx.fillStyle = "#000000";
+          ctx.fillStyle = "#000000"; // ✅ Text schwarz im Export
           ctx.fillText(circuitText, item.x, item.y + item.size + 16);
           ctx.restore();
         }
@@ -809,12 +823,80 @@
       link.click();
     }
 
+    // ===== Projekt speichern/laden (.json) =====
+    function downloadTextFile(filename, text) {
+      const blob = new Blob([text], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 500);
+    }
+
+    function exportProjectJSON() {
+      const data = {
+        version: 1,
+        savedAt: new Date().toISOString(),
+        projectName: state.projectName || "",
+        bgName: state.bgName || "",
+        bgType: state.bgType || null,
+        bgLastModified: state.bgLastModified || 0,
+        pageCount: state.pageCount || 0,
+        symbols: state.symbols || [],
+      };
+
+      const safeName = (state.projectName || "sibe_projekt")
+        .replace(/[^\w\-]+/g, "_")
+        .slice(0, 60);
+
+      downloadTextFile(`${safeName}.json`, JSON.stringify(data, null, 2));
+    }
+
+    async function importProjectJSON(file) {
+      const text = await file.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        alert("Ungültige Projektdatei (JSON fehlerhaft).");
+        return;
+      }
+
+      if (!data || !Array.isArray(data.symbols)) {
+        alert("Ungültige Projektdatei (keine Symbole gefunden).");
+        return;
+      }
+
+      state.projectName = data.projectName || "";
+      projectName.value = state.projectName;
+
+      state.symbols = data.symbols || [];
+      state.selectedId = null;
+
+      state.bgName = data.bgName || "";
+      state.bgType = data.bgType || null;
+      state.bgLastModified = data.bgLastModified || 0;
+
+      // Wichtig: Hintergrund-Datei muss erneut ausgewählt werden (PDF/JPG selbst ist nicht gespeichert)
+      setToolNone();
+      saveState();
+      renderOverlay();
+      updateStatus();
+
+      alert(
+        "Projekt geladen.\n\nBitte jetzt die passende PDF/JPG erneut auswählen:\n" +
+        (state.bgName ? `→ ${state.bgName}` : "→ (Dateiname unbekannt)")
+      );
+    }
+
     // ===== Events =====
     fileInput.addEventListener("change", async (event) => {
       const file = event.target.files[0];
       if (!file) return;
 
       state.bgName = file.name;
+      state.bgLastModified = file.lastModified || Date.now();
       state.selectedId = null;
 
       const type = (file.type || "").toLowerCase();
@@ -882,7 +964,6 @@
       if (state.activeSymbol) {
         placeSymbolAt(event.clientX, event.clientY);
       } else {
-        // nur abwählen, wenn man nicht auf ein Symbol geklickt hat (Symbol stopPropagation macht das)
         clearSelection();
       }
     });
@@ -921,16 +1002,26 @@
         setToolNone();
         return;
       }
-
-      // ✅ Fix: keine Symbol-Löschung während man in Inputs tippt
       if (isTypingInField()) return;
-
       if (!state.selectedId) return;
-
       if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault();
         btnDelete.click();
       }
+    });
+
+    // Projekt speichern/laden UI
+    btnSaveProject.addEventListener("click", () => exportProjectJSON());
+
+    btnLoadProject.addEventListener("click", () => {
+      projectFileInput.value = "";
+      projectFileInput.click();
+    });
+
+    projectFileInput.addEventListener("change", async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      await importProjectJSON(file);
     });
 
     window.addEventListener("beforeunload", saveState);
@@ -943,7 +1034,6 @@
       zoomRange.value = Math.round(state.scale * 100);
       state.pdfjsReady = !!window.pdfjsLib;
 
-      // Start UI
       updateStatus();
       renderOverlay();
 
