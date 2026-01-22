@@ -129,7 +129,7 @@
       touch-action:pan-x pan-y;
     }
 
-    /* ✅ FIX: Stage zentriert Canvas+Overlay zusammen (kein Versatz bei PNG/Platzierung) */
+    /* Stage zentriert Canvas+Overlay zusammen */
     #stage{
       position:relative;
       margin:0 auto;
@@ -137,7 +137,7 @@
     }
     #pdfCanvas{
       display:block;
-      margin:0;          /* kein auto mehr */
+      margin:0;
       background:#111827;
     }
     #overlay{
@@ -179,7 +179,6 @@
     .mini{font-size:11px;color:var(--muted);line-height:1.35;}
   </style>
 
-  <!-- PDF.js nur für PDF (Bilder funktionieren offline). -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
 </head>
 
@@ -212,29 +211,35 @@
       <div class="stack" style="margin-bottom:10px">
         <button class="btn secondary" id="btnToolNone">✋ Auswahl aus / Maus</button>
         <div class="status" id="toolStatus">Werkzeug: keines</div>
-        <div class="mini">Tipp: <kbd>Esc</kbd> = Werkzeug aus. Klick auf aktives Symbol = abwählen.</div>
+
+        <button class="btn secondary" id="btnSelectAllPage">Alle auswählen (Seite)</button>
+        <button class="btn secondary" id="btnClearSelection">Auswahl leeren</button>
+        <div class="mini">
+          Mehrfachauswahl: <kbd>Shift</kbd> + Klick.<br>
+          Gruppenziehen: an einem ausgewählten Symbol ziehen.
+        </div>
       </div>
 
       <h2>Symbole</h2>
       <div class="tool-grid" id="symbolGrid"></div>
 
       <div class="stack" style="margin-top:10px">
-        <label for="symbolSize">Symbolgröße</label>
+        <label for="symbolSize">Symbolgröße (für Auswahl)</label>
         <input id="symbolSize" type="range" min="10" max="48" value="20" />
 
-        <label for="symbolRotate">Rotation</label>
+        <label for="symbolRotate">Rotation (für Auswahl)</label>
         <input id="symbolRotate" type="range" min="0" max="360" value="0" />
 
         <hr style="border-color:var(--line);margin:10px 0" />
 
-        <label for="symbolCircuit">Stromkreis (unter Symbol)</label>
+        <label for="symbolCircuit">Stromkreis (unter Symbol) – nur bei 1 Auswahl</label>
         <input id="symbolCircuit" type="text" placeholder="z. B. A1 / SK-03" />
 
-        <label for="symbolNote">Beschriftung (nur bei Auswahl sichtbar)</label>
+        <label for="symbolNote">Beschriftung (nur bei Auswahl sichtbar) – nur bei 1 Auswahl</label>
         <input id="symbolNote" type="text" placeholder="z. B. über Tor 2" />
 
         <button class="btn secondary" id="btnDelete" disabled>Auswahl löschen</button>
-        <div class="mini">Backspace/Delete in den Feldern löscht nur Text – nicht das Symbol.</div>
+        <div class="mini">Backspace/Delete in Feldern löscht nur Text – nicht die Symbole.</div>
       </div>
 
       <hr style="border-color:var(--line);margin:12px 0" />
@@ -244,8 +249,8 @@
         1. Plan laden (PDF oder Bild).<br />
         2. Symbol auswählen → im Plan klicken = platzieren.<br />
         3. Danach wird Werkzeug automatisch deaktiviert (kein Versehen).<br />
-        4. Symbol anklicken → links bearbeiten / ziehen zum Verschieben.<br />
-        5. PNG-Export bleibt korrekt, auch bei Zoom.<br />
+        4. Symbol(e) anklicken → links bearbeiten / ziehen zum Verschieben.<br />
+        5. PNG-Export bleibt korrekt.<br />
       </p>
     </section>
 
@@ -265,7 +270,6 @@
       </div>
 
       <div class="canvas-area" id="canvasArea">
-        <!-- ✅ FIX: Stage wrapper -->
         <div id="stage">
           <canvas id="pdfCanvas"></canvas>
           <div id="overlay"></div>
@@ -289,7 +293,7 @@
     const projectStatus = document.getElementById("projectStatus");
     const pageStatus = document.getElementById("pageStatus");
     const pdfCanvas = document.getElementById("pdfCanvas");
-    const stage = document.getElementById("stage");      // ✅ FIX
+    const stage = document.getElementById("stage");
     const overlay = document.getElementById("overlay");
     const emptyState = document.getElementById("emptyState");
 
@@ -313,8 +317,11 @@
     const btnLoadProject = document.getElementById("btnLoadProject");
     const projectFileInput = document.getElementById("projectFileInput");
 
+    const btnSelectAllPage = document.getElementById("btnSelectAllPage");
+    const btnClearSelection = document.getElementById("btnClearSelection");
+
     // ===== State =====
-    const STORAGE_KEY = "sibe_planner_state_v9";
+    const STORAGE_KEY = "sibe_planner_state_v10";
     const state = {
       bgType: null,         // "pdf" | "image"
       bgName: "",
@@ -333,7 +340,11 @@
       imageNaturalH: 0,
 
       activeSymbol: null,
-      selectedId: null,
+
+      // ✅ Mehrfachauswahl
+      selectedIds: [],       // array of ids
+      primarySelectedId: null, // id or null
+
       symbols: [],
 
       projectName: "",
@@ -342,7 +353,6 @@
 
     // ===== Symbols =====
     const symbolDefs = [
-      // Rettungszeichen
       { id: "exit-left", label: "Rettungszeichen links",
         svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M36 16h10v32H36v-8h6V24h-6v-8Z" fill="#fff"/><path d="M26 26c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3Z" fill="#fff"/><path d="M20 42l4-10 6 4 4 8-4 2-3-6-2 4h-5Z" fill="#fff"/><path d="M12 32h18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M16 26l-8 6 8 6" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
       { id: "exit-right", label: "Rettungszeichen rechts",
@@ -354,13 +364,11 @@
       { id: "exit-straight", label: "Rettungszeichen geradeaus",
         svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#1aa04a"/><path d="M16 42V32h8v6h16v-6h8v10H16Z" fill="#fff"/><path d="M32 20c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3Z" fill="#fff"/><path d="M24 30l4-6 8 6 4 10-5 2-3-8-3 4h-5Z" fill="#fff"/><path d="M32 12v18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M26 16l6-8 6 8" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
 
-      // Leuchten
       { id: "lamp", label: "Notleuchte",
         svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#0ea5e9"/><rect x="14" y="20" width="36" height="18" rx="4" fill="#fff"/><path d="M22 42h20l-2 6H24l-2-6Z" fill="#fff"/><path d="M32 10v6" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M20 14l4 4" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M44 14l-4 4" stroke="#fff" stroke-width="4" stroke-linecap="round"/></svg>` },
       { id: "lamp-emergency", label: "Sicherheitsleuchte",
         svg: `<svg viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="6" fill="#f59e0b"/><path d="M16 32c0-8.8 7.2-16 16-16s16 7.2 16 16c0 6.3-3.7 11.8-9 14.3V50H25v-5.7c-5.3-2.5-9-8-9-14.3Z" fill="#fff"/><rect x="24" y="50" width="16" height="6" rx="2" fill="#fff"/></svg>` },
 
-      // Elektro
       { id: "junction-box", label: "Abzweigdose",
         svg: `<svg viewBox="0 0 64 64" fill="none">
           <rect width="64" height="64" rx="6" fill="#64748b"/>
@@ -369,7 +377,6 @@
           <path d="M32 22v20M22 32h20" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
         </svg>` },
 
-      // Feuerlöscher
       { id: "fire-extinguisher", label: "Feuerlöscher",
         svg: `<svg viewBox="0 0 64 64" fill="none">
           <rect width="64" height="64" rx="6" fill="#ef4444"/>
@@ -390,6 +397,8 @@
       return tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable === true;
     }
 
+    function unique(arr){ return Array.from(new Set(arr)); }
+
     function saveState() {
       const data = {
         bgName: state.bgName,
@@ -399,7 +408,8 @@
         scale: state.scale,
         symbols: state.symbols,
         activeSymbol: state.activeSymbol,
-        selectedId: state.selectedId,
+        selectedIds: state.selectedIds,
+        primarySelectedId: state.primarySelectedId,
         projectName: state.projectName,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -417,7 +427,10 @@
         state.scale = typeof data.scale === "number" ? data.scale : 1;
         state.symbols = Array.isArray(data.symbols) ? data.symbols : [];
         state.activeSymbol = data.activeSymbol || null;
-        state.selectedId = data.selectedId || null;
+
+        state.selectedIds = Array.isArray(data.selectedIds) ? data.selectedIds : [];
+        state.primarySelectedId = data.primarySelectedId || null;
+
         state.projectName = data.projectName || "";
         projectName.value = state.projectName;
       } catch {
@@ -454,18 +467,74 @@
         btn.className = "symbol-btn";
         btn.dataset.symbol = def.id;
         btn.innerHTML = `${def.svg}<span>${def.label}</span>`;
-        btn.addEventListener("click", () => setActiveSymbol(def.id)); // ✅ nur click
-
+        btn.addEventListener("click", () => setActiveSymbol(def.id));
         btn.setAttribute("draggable", "true");
         btn.addEventListener("dragstart", (event) => {
           event.dataTransfer.setData("text/plain", def.id);
         });
-
         symbolGrid.appendChild(btn);
       });
 
       if (state.activeSymbol) setActiveSymbol(state.activeSymbol);
       else setToolNone();
+    }
+
+    function getSelectedItemsOnPage() {
+      const set = new Set(state.selectedIds);
+      return state.symbols.filter(s => s.page === state.pageNum && set.has(s.id));
+    }
+
+    function setSelection(ids, primary=null) {
+      state.selectedIds = unique(ids.filter(Boolean));
+      state.primarySelectedId = primary && state.selectedIds.includes(primary) ? primary : (state.selectedIds[0] || null);
+      syncSidebarFields();
+      renderOverlay();
+      saveState();
+    }
+
+    function toggleSelection(id) {
+      const ids = new Set(state.selectedIds);
+      if (ids.has(id)) ids.delete(id);
+      else ids.add(id);
+      const arr = Array.from(ids);
+      const primary = state.primarySelectedId && arr.includes(state.primarySelectedId)
+        ? state.primarySelectedId
+        : (arr[0] || null);
+      setSelection(arr, primary);
+    }
+
+    function clearSelection() {
+      state.selectedIds = [];
+      state.primarySelectedId = null;
+      syncSidebarFields();
+      renderOverlay();
+      saveState();
+    }
+
+    function syncSidebarFields() {
+      const count = state.selectedIds.length;
+      btnDelete.disabled = count === 0;
+
+      // nur bei 1 Auswahl kann man Circuit/Note editieren
+      const single = count === 1;
+      symbolCircuit.disabled = !single;
+      symbolNote.disabled = !single;
+
+      symbolSize.disabled = count === 0;
+      symbolRotate.disabled = count === 0;
+
+      if (!single) {
+        symbolCircuit.value = "";
+        symbolNote.value = "";
+      } else {
+        const item = state.symbols.find(s => s.id === state.primarySelectedId);
+        symbolCircuit.value = item?.circuit || "";
+        symbolNote.value = item?.note || "";
+        if (item) {
+          symbolSize.value = item.size;
+          symbolRotate.value = item.rotation;
+        }
+      }
     }
 
     function updateStatus() {
@@ -482,51 +551,29 @@
       btnNext.disabled = state.pageNum >= state.pageCount;
       btnExport.disabled = !planLoaded;
       emptyState.style.display = planLoaded ? "none" : "flex";
-      btnDelete.disabled = !state.selectedId;
 
-      const sel = state.symbols.find(s => s.id === state.selectedId);
-      symbolCircuit.disabled = !sel;
-      symbolNote.disabled = !sel;
-      symbolSize.disabled = !sel;
-      symbolRotate.disabled = !sel;
+      syncSidebarFields();
     }
 
-    function selectSymbol(id) {
-      state.selectedId = id;
-      const item = state.symbols.find(s => s.id === id);
-      if (item) {
-        symbolSize.value = item.size;
-        symbolRotate.value = item.rotation;
-        symbolCircuit.value = item.circuit || "";
-        symbolNote.value = item.note || "";
-      } else {
-        symbolCircuit.value = "";
-        symbolNote.value = "";
-      }
+    function applySizeRotationToSelection() {
+      if (state.selectedIds.length === 0) return;
+      const size = Number(symbolSize.value);
+      const rot = Number(symbolRotate.value);
+      const set = new Set(state.selectedIds);
+      state.symbols.forEach(s => {
+        if (s.page === state.pageNum && set.has(s.id)) {
+          s.size = size;
+          s.rotation = rot;
+        }
+      });
       renderOverlay();
       saveState();
     }
 
-    function clearSelection() {
-      state.selectedId = null;
-      symbolCircuit.value = "";
-      symbolNote.value = "";
-      renderOverlay();
-      saveState();
-    }
-
-    function updateSelectedSymbolSizing() {
-      const item = state.symbols.find(s => s.id === state.selectedId);
-      if (!item) return;
-      item.size = Number(symbolSize.value);
-      item.rotation = Number(symbolRotate.value);
-      renderOverlay();
-      saveState();
-    }
-
-    // ===== Overlay render =====
+    // ===== Drag (single + group) =====
     function enableDrag(element) {
-      let startX = 0, startY = 0, originX = 0, originY = 0, dragging = false;
+      let startX = 0, startY = 0, dragging = false;
+      let snapshot = null; // {id:{x,y}}
 
       const onMove = (event) => {
         if (!dragging) return;
@@ -534,14 +581,18 @@
         const dy = event.clientY - startY;
         const scale = state.scale;
 
-        const item = state.symbols.find(s => s.id === element.dataset.id);
-        if (!item) return;
+        const selSet = new Set(state.selectedIds);
+        for (const sym of state.symbols) {
+          if (sym.page !== state.pageNum) continue;
+          if (!selSet.has(sym.id)) continue;
+          const base = snapshot[sym.id];
+          if (!base) continue;
+          sym.x = Math.max(0, base.x + dx / scale);
+          sym.y = Math.max(0, base.y + dy / scale);
+        }
 
-        item.x = Math.max(0, originX + dx / scale);
-        item.y = Math.max(0, originY + dy / scale);
-
-        element.style.left = `${item.x * scale}px`;
-        element.style.top = `${item.y * scale}px`;
+        // für Performance: nicht alles neu bauen, aber Positionen aktualisieren wir über renderOverlay (safe)
+        renderOverlay();
       };
 
       const stopMove = () => {
@@ -557,17 +608,33 @@
         event.preventDefault();
         event.stopPropagation();
 
-        const item = state.symbols.find(s => s.id === element.dataset.id);
-        if (!item) return;
+        const id = element.dataset.id;
+        if (!id) return;
 
-        selectSymbol(item.id);
+        // Wenn das Element nicht in Auswahl ist, dann: ohne Shift => nur dieses auswählen
+        const alreadySelected = state.selectedIds.includes(id);
+        if (!alreadySelected) {
+          setSelection([id], id);
+        } else {
+          // ist schon ausgewählt: primär setzen
+          state.primarySelectedId = id;
+          syncSidebarFields();
+          saveState();
+        }
+
+        // Snapshot aller ausgewählten (für Gruppendrag)
+        snapshot = {};
+        const selSet = new Set(state.selectedIds);
+        for (const s of state.symbols) {
+          if (s.page === state.pageNum && selSet.has(s.id)) {
+            snapshot[s.id] = { x: s.x, y: s.y };
+          }
+        }
 
         dragging = true;
         element.classList.add("dragging");
         startX = event.clientX;
         startY = event.clientY;
-        originX = item.x;
-        originY = item.y;
 
         element.setPointerCapture(event.pointerId);
         document.addEventListener("pointermove", onMove);
@@ -576,15 +643,17 @@
       });
     }
 
+    // ===== Overlay render =====
     function renderOverlay() {
       overlay.innerHTML = "";
       const scale = state.scale;
       const items = state.symbols.filter(item => item.page === state.pageNum);
+      const selSet = new Set(state.selectedIds);
 
       items.forEach(item => {
         const div = document.createElement("div");
         div.className = "overlay-item";
-        if (state.selectedId === item.id) div.classList.add("selected");
+        if (selSet.has(item.id)) div.classList.add("selected");
 
         div.style.left = `${item.x * scale}px`;
         div.style.top = `${item.y * scale}px`;
@@ -615,9 +684,9 @@
           div.appendChild(cap);
         }
 
-        // Beschriftung nur bei Auswahl sichtbar
+        // Beschriftung nur bei primärer Auswahl sichtbar
         const noteText = (item.note ?? "").trim();
-        if (state.selectedId === item.id && noteText) {
+        if (state.primarySelectedId === item.id && noteText) {
           const note = document.createElement("div");
           note.style.position = "absolute";
           note.style.left = "50%";
@@ -638,9 +707,14 @@
         div.dataset.id = item.id;
         enableDrag(div);
 
+        // Klick: Shift = toggle, sonst single-select
         div.addEventListener("click", (event) => {
           event.stopPropagation();
-          selectSymbol(item.id);
+          if (event.shiftKey) {
+            toggleSelection(item.id);
+          } else {
+            setSelection([item.id], item.id);
+          }
         });
 
         overlay.appendChild(div);
@@ -657,7 +731,6 @@
       pdfCanvas.width = viewport.width;
       pdfCanvas.height = viewport.height;
 
-      // ✅ FIX: stage dimension (Overlay folgt per inset:0)
       stage.style.width = `${viewport.width}px`;
       stage.style.height = `${viewport.height}px`;
 
@@ -678,7 +751,6 @@
       pdfCanvas.width = w;
       pdfCanvas.height = h;
 
-      // ✅ FIX: stage dimension
       stage.style.width = `${w}px`;
       stage.style.height = `${h}px`;
 
@@ -750,7 +822,6 @@
       if (!state.activeSymbol) return;
       if (!state.pageCount) return;
 
-      // ✅ FIX: rect from stage, not overlay
       const rect = stage.getBoundingClientRect();
       const scale = state.scale;
       const size = Number(symbolSize.value);
@@ -772,12 +843,14 @@
       };
 
       state.symbols.push(symbol);
-      selectSymbol(id);
+
+      // nach Platzieren: Symbol auswählen, Werkzeug aus
+      setSelection([id], id);
       saveState();
-      setToolNone(); // nach Platzieren Werkzeug aus
+      setToolNone();
     }
 
-    // ===== Export PNG (robust, mit Stage-Offset) =====
+    // ===== Export PNG =====
     function svgToImage(svgMarkup) {
       return new Promise((resolve) => {
         const img = new Image();
@@ -792,7 +865,6 @@
       const exportCanvas = document.createElement("canvas");
       const ctx = exportCanvas.getContext("2d");
 
-      // Hintergrund immer in scale=1 rendern (Zoom-unabhängig)
       if (state.bgType === "pdf" && state.pdfDoc) {
         const page = await state.pdfDoc.getPage(state.pageNum);
         const viewport = page.getViewport({ scale: 1 });
@@ -887,7 +959,8 @@
       projectName.value = state.projectName;
 
       state.symbols = data.symbols || [];
-      state.selectedId = null;
+      state.selectedIds = [];
+      state.primarySelectedId = null;
 
       state.bgName = data.bgName || "";
       state.bgType = data.bgType || null;
@@ -911,7 +984,7 @@
 
       state.bgName = file.name;
       state.bgLastModified = file.lastModified || Date.now();
-      state.selectedId = null;
+      clearSelection();
 
       const type = (file.type || "").toLowerCase();
       if (type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
@@ -938,6 +1011,7 @@
     btnPrev.addEventListener("click", async () => {
       if (state.pageNum <= 1) return;
       state.pageNum -= 1;
+      clearSelection();
       await renderCurrent();
       saveState();
     });
@@ -945,6 +1019,7 @@
     btnNext.addEventListener("click", async () => {
       if (state.pageNum >= state.pageCount) return;
       state.pageNum += 1;
+      clearSelection();
       await renderCurrent();
       saveState();
     });
@@ -965,8 +1040,9 @@
     btnExport.addEventListener("click", exportPNG);
 
     btnDelete.addEventListener("click", () => {
-      if (!state.selectedId) return;
-      state.symbols = state.symbols.filter(s => s.id !== state.selectedId);
+      if (state.selectedIds.length === 0) return;
+      const del = new Set(state.selectedIds);
+      state.symbols = state.symbols.filter(s => !del.has(s.id));
       clearSelection();
       saveState();
       renderOverlay();
@@ -974,11 +1050,20 @@
 
     btnToolNone.addEventListener("click", setToolNone);
 
+    btnSelectAllPage.addEventListener("click", () => {
+      const ids = state.symbols.filter(s => s.page === state.pageNum).map(s => s.id);
+      setSelection(ids, ids[0] || null);
+    });
+
+    btnClearSelection.addEventListener("click", () => clearSelection());
+
+    // Klick auf freien Bereich: wenn Tool aktiv -> platzieren, sonst Auswahl leeren
     overlay.addEventListener("click", (event) => {
       if (state.activeSymbol) {
         placeSymbolAt(event.clientX, event.clientY);
       } else {
-        clearSelection();
+        // nur wenn nicht shift (damit man shift klicken kann ohne alles zu verlieren)
+        if (!event.shiftKey) clearSelection();
       }
     });
 
@@ -991,11 +1076,12 @@
       placeSymbolAt(event.clientX, event.clientY);
     });
 
-    symbolSize.addEventListener("input", updateSelectedSymbolSizing);
-    symbolRotate.addEventListener("input", updateSelectedSymbolSizing);
+    symbolSize.addEventListener("input", applySizeRotationToSelection);
+    symbolRotate.addEventListener("input", applySizeRotationToSelection);
 
     symbolCircuit.addEventListener("input", () => {
-      const item = state.symbols.find(s => s.id === state.selectedId);
+      if (state.selectedIds.length !== 1) return;
+      const item = state.symbols.find(s => s.id === state.primarySelectedId);
       if (!item) return;
       item.circuit = symbolCircuit.value;
       saveState();
@@ -1003,7 +1089,8 @@
     });
 
     symbolNote.addEventListener("input", () => {
-      const item = state.symbols.find(s => s.id === state.selectedId);
+      if (state.selectedIds.length !== 1) return;
+      const item = state.symbols.find(s => s.id === state.primarySelectedId);
       if (!item) return;
       item.note = symbolNote.value;
       saveState();
@@ -1017,21 +1104,18 @@
         return;
       }
       if (isTypingInField()) return;
-      if (!state.selectedId) return;
-      if (event.key === "Delete" || event.key === "Backspace") {
+
+      if ((event.key === "Delete" || event.key === "Backspace") && state.selectedIds.length > 0) {
         event.preventDefault();
         btnDelete.click();
       }
     });
 
-    // Projekt speichern/laden UI
     btnSaveProject.addEventListener("click", () => exportProjectJSON());
-
     btnLoadProject.addEventListener("click", () => {
       projectFileInput.value = "";
       projectFileInput.click();
     });
-
     projectFileInput.addEventListener("change", async (event) => {
       const file = event.target.files[0];
       if (!file) return;
@@ -1046,10 +1130,10 @@
       renderSymbolButtons();
       zoomRange.value = Math.round(state.scale * 100);
       state.pdfjsReady = !!window.pdfjsLib;
+
       updateStatus();
       renderOverlay();
 
-      // pdfjs kann leicht später geladen sein
       setTimeout(() => {
         state.pdfjsReady = !!window.pdfjsLib;
         updateStatus();
