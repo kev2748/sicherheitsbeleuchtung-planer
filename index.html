@@ -128,8 +128,23 @@
       min-height:60vh;
       touch-action:pan-x pan-y;
     }
-    #pdfCanvas{display:block;margin:0 auto;background:#111827;}
-    #overlay{position:absolute;inset:0;pointer-events:auto;}
+
+    /* ✅ FIX: Stage zentriert Canvas+Overlay zusammen (kein Versatz bei PNG/Platzierung) */
+    #stage{
+      position:relative;
+      margin:0 auto;
+      width:0; height:0; /* wird per JS gesetzt */
+    }
+    #pdfCanvas{
+      display:block;
+      margin:0;          /* kein auto mehr */
+      background:#111827;
+    }
+    #overlay{
+      position:absolute;
+      inset:0;
+      pointer-events:auto;
+    }
 
     .empty-state{
       position:absolute; inset:0;
@@ -186,7 +201,7 @@
         <input id="projectFileInput" type="file" accept="application/json" style="display:none" />
 
         <div class="mini">
-          Hinweis: Die PDF/JPG-Datei selbst wird nicht in der Projektdatei gespeichert. Beim Projekt-Laden bitte die passende
+          Hinweis: Die PDF/JPG-Datei wird nicht in der Projektdatei gespeichert. Beim Projekt-Laden bitte die passende
           PDF/JPG erneut auswählen – Symbole/Beschriftungen bleiben erhalten.
         </div>
       </div>
@@ -250,8 +265,11 @@
       </div>
 
       <div class="canvas-area" id="canvasArea">
-        <canvas id="pdfCanvas"></canvas>
-        <div id="overlay"></div>
+        <!-- ✅ FIX: Stage wrapper -->
+        <div id="stage">
+          <canvas id="pdfCanvas"></canvas>
+          <div id="overlay"></div>
+        </div>
 
         <div class="empty-state" id="emptyState">
           <div>
@@ -271,6 +289,7 @@
     const projectStatus = document.getElementById("projectStatus");
     const pageStatus = document.getElementById("pageStatus");
     const pdfCanvas = document.getElementById("pdfCanvas");
+    const stage = document.getElementById("stage");      // ✅ FIX
     const overlay = document.getElementById("overlay");
     const emptyState = document.getElementById("emptyState");
 
@@ -295,7 +314,7 @@
     const projectFileInput = document.getElementById("projectFileInput");
 
     // ===== State =====
-    const STORAGE_KEY = "sibe_planner_state_v8";
+    const STORAGE_KEY = "sibe_planner_state_v9";
     const state = {
       bgType: null,         // "pdf" | "image"
       bgName: "",
@@ -413,7 +432,6 @@
       saveState();
     }
 
-    // Klick auf aktives Symbol => abwählen
     function setActiveSymbol(id) {
       if (state.activeSymbol === id) {
         setToolNone();
@@ -436,9 +454,7 @@
         btn.className = "symbol-btn";
         btn.dataset.symbol = def.id;
         btn.innerHTML = `${def.svg}<span>${def.label}</span>`;
-
-        // ✅ nur click (kein pointerdown) -> kein Doppel-Toggle
-        btn.addEventListener("click", () => setActiveSymbol(def.id));
+        btn.addEventListener("click", () => setActiveSymbol(def.id)); // ✅ nur click
 
         btn.setAttribute("draggable", "true");
         btn.addEventListener("dragstart", (event) => {
@@ -579,7 +595,7 @@
         const def = symbolDefs.find(s => s.id === item.symbol);
         div.innerHTML = def ? def.svg : "";
 
-        // Stromkreis immer sichtbar (✅ Text schwarz)
+        // Stromkreis immer sichtbar (Text schwarz)
         const circuitText = (item.circuit ?? "").trim();
         if (circuitText) {
           const cap = document.createElement("div");
@@ -640,8 +656,10 @@
 
       pdfCanvas.width = viewport.width;
       pdfCanvas.height = viewport.height;
-      overlay.style.width = `${viewport.width}px`;
-      overlay.style.height = `${viewport.height}px`;
+
+      // ✅ FIX: stage dimension (Overlay folgt per inset:0)
+      stage.style.width = `${viewport.width}px`;
+      stage.style.height = `${viewport.height}px`;
 
       const ctx = pdfCanvas.getContext("2d");
       await page.render({ canvasContext: ctx, viewport }).promise;
@@ -659,8 +677,10 @@
 
       pdfCanvas.width = w;
       pdfCanvas.height = h;
-      overlay.style.width = `${w}px`;
-      overlay.style.height = `${h}px`;
+
+      // ✅ FIX: stage dimension
+      stage.style.width = `${w}px`;
+      stage.style.height = `${h}px`;
 
       const ctx = pdfCanvas.getContext("2d");
       ctx.clearRect(0, 0, w, h);
@@ -730,7 +750,8 @@
       if (!state.activeSymbol) return;
       if (!state.pageCount) return;
 
-      const rect = overlay.getBoundingClientRect();
+      // ✅ FIX: rect from stage, not overlay
+      const rect = stage.getBoundingClientRect();
       const scale = state.scale;
       const size = Number(symbolSize.value);
 
@@ -753,12 +774,10 @@
       state.symbols.push(symbol);
       selectSymbol(id);
       saveState();
-
-      // nach Platzieren Werkzeug aus
-      setToolNone();
+      setToolNone(); // nach Platzieren Werkzeug aus
     }
 
-    // ===== Export PNG =====
+    // ===== Export PNG (robust, mit Stage-Offset) =====
     function svgToImage(svgMarkup) {
       return new Promise((resolve) => {
         const img = new Image();
@@ -811,7 +830,7 @@
         if (circuitText) {
           ctx.save();
           ctx.font = `${Math.max(10, Math.round(item.size * 0.45))}px system-ui,Segoe UI,Roboto,Arial,sans-serif`;
-          ctx.fillStyle = "#000000"; // ✅ Text schwarz im Export
+          ctx.fillStyle = "#000000";
           ctx.fillText(circuitText, item.x, item.y + item.size + 16);
           ctx.restore();
         }
@@ -856,12 +875,8 @@
     async function importProjectJSON(file) {
       const text = await file.text();
       let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        alert("Ungültige Projektdatei (JSON fehlerhaft).");
-        return;
-      }
+      try { data = JSON.parse(text); }
+      catch { alert("Ungültige Projektdatei (JSON fehlerhaft)."); return; }
 
       if (!data || !Array.isArray(data.symbols)) {
         alert("Ungültige Projektdatei (keine Symbole gefunden).");
@@ -878,7 +893,6 @@
       state.bgType = data.bgType || null;
       state.bgLastModified = data.bgLastModified || 0;
 
-      // Wichtig: Hintergrund-Datei muss erneut ausgewählt werden (PDF/JPG selbst ist nicht gespeichert)
       setToolNone();
       saveState();
       renderOverlay();
@@ -1030,10 +1044,8 @@
     function init() {
       loadState();
       renderSymbolButtons();
-
       zoomRange.value = Math.round(state.scale * 100);
       state.pdfjsReady = !!window.pdfjsLib;
-
       updateStatus();
       renderOverlay();
 
