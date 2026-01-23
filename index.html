@@ -58,7 +58,7 @@
     }
     .stack{display:flex;flex-direction:column;gap:8px}
     label{font-size:12px;color:var(--muted)}
-    input[type="file"],input[type="text"],button,input[type="range"]{font:inherit;}
+    input[type="file"],input[type="text"],button,input[type="range"],select{font:inherit;}
     input[type="text"]{
       width:100%;
       padding:8px 10px;
@@ -129,7 +129,7 @@
       touch-action:pan-x pan-y;
     }
 
-    /* Stage zentriert Canvas+Overlay zusammen */
+    /* ✅ Stage zentriert Canvas+Overlay zusammen -> kein Versatz bei Export */
     #stage{
       position:relative;
       margin:0 auto;
@@ -179,7 +179,10 @@
     .mini{font-size:11px;color:var(--muted);line-height:1.35;}
   </style>
 
+  <!-- PDF.js (für PDF-Hintergrund) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
+  <!-- jsPDF (für PDF-Export) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 </head>
 
 <body>
@@ -214,6 +217,14 @@
 
         <button class="btn secondary" id="btnSelectAllPage">Alle auswählen (Seite)</button>
         <button class="btn secondary" id="btnClearSelection">Auswahl leeren</button>
+
+        <label for="pdfQuality">PDF-Qualität (Export)</label>
+        <select id="pdfQuality" style="width:100%;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink)">
+          <option value="2">2× (gut)</option>
+          <option value="3" selected>3× (sehr gut)</option>
+          <option value="4">4× (extrem, große Datei)</option>
+        </select>
+
         <div class="mini">
           Mehrfachauswahl: <kbd>Shift</kbd> + Klick.<br>
           Gruppenziehen: an einem ausgewählten Symbol ziehen.
@@ -250,7 +261,7 @@
         2. Symbol auswählen → im Plan klicken = platzieren.<br />
         3. Danach wird Werkzeug automatisch deaktiviert (kein Versehen).<br />
         4. Symbol(e) anklicken → links bearbeiten / ziehen zum Verschieben.<br />
-        5. PNG-Export bleibt korrekt.<br />
+        5. Export als PDF (HQ) mit wählbarer Auflösung.<br />
       </p>
     </section>
 
@@ -266,7 +277,7 @@
         </label>
 
         <button class="btn secondary" id="btnResetView">Ansicht zurücksetzen</button>
-        <button class="btn secondary" id="btnExport" disabled>PNG exportieren</button>
+        <button class="btn secondary" id="btnExport" disabled>PDF exportieren (HQ)</button>
       </div>
 
       <div class="canvas-area" id="canvasArea">
@@ -303,6 +314,8 @@
     const btnResetView = document.getElementById("btnResetView");
     const btnExport = document.getElementById("btnExport");
 
+    const pdfQuality = document.getElementById("pdfQuality");
+
     const symbolGrid = document.getElementById("symbolGrid");
     const symbolSize = document.getElementById("symbolSize");
     const symbolRotate = document.getElementById("symbolRotate");
@@ -321,7 +334,7 @@
     const btnClearSelection = document.getElementById("btnClearSelection");
 
     // ===== State =====
-    const STORAGE_KEY = "sibe_planner_state_v10";
+    const STORAGE_KEY = "sibe_planner_state_v11";
     const state = {
       bgType: null,         // "pdf" | "image"
       bgName: "",
@@ -341,9 +354,8 @@
 
       activeSymbol: null,
 
-      // ✅ Mehrfachauswahl
-      selectedIds: [],       // array of ids
-      primarySelectedId: null, // id or null
+      selectedIds: [],
+      primarySelectedId: null,
 
       symbols: [],
 
@@ -396,7 +408,6 @@
       const tag = (el.tagName || "").toLowerCase();
       return tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable === true;
     }
-
     function unique(arr){ return Array.from(new Set(arr)); }
 
     function saveState() {
@@ -411,6 +422,7 @@
         selectedIds: state.selectedIds,
         primarySelectedId: state.primarySelectedId,
         projectName: state.projectName,
+        pdfQuality: pdfQuality.value
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     }
@@ -427,12 +439,11 @@
         state.scale = typeof data.scale === "number" ? data.scale : 1;
         state.symbols = Array.isArray(data.symbols) ? data.symbols : [];
         state.activeSymbol = data.activeSymbol || null;
-
         state.selectedIds = Array.isArray(data.selectedIds) ? data.selectedIds : [];
         state.primarySelectedId = data.primarySelectedId || null;
-
         state.projectName = data.projectName || "";
         projectName.value = state.projectName;
+        if (data.pdfQuality) pdfQuality.value = String(data.pdfQuality);
       } catch {
         localStorage.removeItem(STORAGE_KEY);
       }
@@ -446,10 +457,7 @@
     }
 
     function setActiveSymbol(id) {
-      if (state.activeSymbol === id) {
-        setToolNone();
-        return;
-      }
+      if (state.activeSymbol === id) { setToolNone(); return; }
       state.activeSymbol = id;
       document.querySelectorAll(".symbol-btn").forEach(btn => {
         btn.classList.toggle("active", btn.dataset.symbol === id);
@@ -479,14 +487,10 @@
       else setToolNone();
     }
 
-    function getSelectedItemsOnPage() {
-      const set = new Set(state.selectedIds);
-      return state.symbols.filter(s => s.page === state.pageNum && set.has(s.id));
-    }
-
     function setSelection(ids, primary=null) {
       state.selectedIds = unique(ids.filter(Boolean));
-      state.primarySelectedId = primary && state.selectedIds.includes(primary) ? primary : (state.selectedIds[0] || null);
+      state.primarySelectedId =
+        primary && state.selectedIds.includes(primary) ? primary : (state.selectedIds[0] || null);
       syncSidebarFields();
       renderOverlay();
       saveState();
@@ -494,8 +498,7 @@
 
     function toggleSelection(id) {
       const ids = new Set(state.selectedIds);
-      if (ids.has(id)) ids.delete(id);
-      else ids.add(id);
+      if (ids.has(id)) ids.delete(id); else ids.add(id);
       const arr = Array.from(ids);
       const primary = state.primarySelectedId && arr.includes(state.primarySelectedId)
         ? state.primarySelectedId
@@ -515,7 +518,6 @@
       const count = state.selectedIds.length;
       btnDelete.disabled = count === 0;
 
-      // nur bei 1 Auswahl kann man Circuit/Note editieren
       const single = count === 1;
       symbolCircuit.disabled = !single;
       symbolNote.disabled = !single;
@@ -573,7 +575,7 @@
     // ===== Drag (single + group) =====
     function enableDrag(element) {
       let startX = 0, startY = 0, dragging = false;
-      let snapshot = null; // {id:{x,y}}
+      let snapshot = null;
 
       const onMove = (event) => {
         if (!dragging) return;
@@ -590,8 +592,6 @@
           sym.x = Math.max(0, base.x + dx / scale);
           sym.y = Math.max(0, base.y + dy / scale);
         }
-
-        // für Performance: nicht alles neu bauen, aber Positionen aktualisieren wir über renderOverlay (safe)
         renderOverlay();
       };
 
@@ -611,18 +611,15 @@
         const id = element.dataset.id;
         if (!id) return;
 
-        // Wenn das Element nicht in Auswahl ist, dann: ohne Shift => nur dieses auswählen
         const alreadySelected = state.selectedIds.includes(id);
         if (!alreadySelected) {
           setSelection([id], id);
         } else {
-          // ist schon ausgewählt: primär setzen
           state.primarySelectedId = id;
           syncSidebarFields();
           saveState();
         }
 
-        // Snapshot aller ausgewählten (für Gruppendrag)
         snapshot = {};
         const selSet = new Set(state.selectedIds);
         for (const s of state.symbols) {
@@ -707,14 +704,10 @@
         div.dataset.id = item.id;
         enableDrag(div);
 
-        // Klick: Shift = toggle, sonst single-select
         div.addEventListener("click", (event) => {
           event.stopPropagation();
-          if (event.shiftKey) {
-            toggleSelection(item.id);
-          } else {
-            setSelection([item.id], item.id);
-          }
+          if (event.shiftKey) toggleSelection(item.id);
+          else setSelection([item.id], item.id);
         });
 
         overlay.appendChild(div);
@@ -723,7 +716,7 @@
       updateStatus();
     }
 
-    // ===== Rendering background =====
+    // ===== Background render =====
     async function renderPdfPage(pdf, pageNum) {
       const page = await pdf.getPage(pageNum);
       const viewport = page.getViewport({ scale: state.scale });
@@ -843,14 +836,12 @@
       };
 
       state.symbols.push(symbol);
-
-      // nach Platzieren: Symbol auswählen, Werkzeug aus
       setSelection([id], id);
       saveState();
       setToolNone();
     }
 
-    // ===== Export PNG =====
+    // ===== Export PDF (HQ) =====
     function svgToImage(svgMarkup) {
       return new Promise((resolve) => {
         const img = new Image();
@@ -859,28 +850,33 @@
       });
     }
 
-    async function exportPNG() {
+    async function exportPDF() {
       if (!state.pageCount) return;
+
+      const HQ = Math.max(1, Math.min(6, Number(pdfQuality.value) || 3));
 
       const exportCanvas = document.createElement("canvas");
       const ctx = exportCanvas.getContext("2d");
 
+      // Hintergrund in HQ rendern
       if (state.bgType === "pdf" && state.pdfDoc) {
         const page = await state.pdfDoc.getPage(state.pageNum);
-        const viewport = page.getViewport({ scale: 1 });
-        exportCanvas.width = viewport.width;
-        exportCanvas.height = viewport.height;
+        const viewport = page.getViewport({ scale: HQ });
+        exportCanvas.width = Math.round(viewport.width);
+        exportCanvas.height = Math.round(viewport.height);
         await page.render({ canvasContext: ctx, viewport }).promise;
+
       } else if (state.bgType === "image" && state.imageEl) {
-        exportCanvas.width = state.imageNaturalW;
-        exportCanvas.height = state.imageNaturalH;
-        ctx.drawImage(state.imageEl, 0, 0);
+        exportCanvas.width = Math.round(state.imageNaturalW * HQ);
+        exportCanvas.height = Math.round(state.imageNaturalH * HQ);
+        ctx.drawImage(state.imageEl, 0, 0, exportCanvas.width, exportCanvas.height);
+
       } else {
         return;
       }
 
+      // Symbole in HQ zeichnen
       const items = state.symbols.filter(s => s.page === state.pageNum);
-
       for (const item of items) {
         const def = symbolDefs.find(s => s.id === item.symbol);
         if (!def) continue;
@@ -891,27 +887,50 @@
         const svgData = new XMLSerializer().serializeToString(svg);
         const img = await svgToImage(svgData);
 
+        const x = item.x * HQ;
+        const y = item.y * HQ;
+        const size = item.size * HQ;
+
         ctx.save();
-        ctx.translate(item.x + item.size / 2, item.y + item.size / 2);
+        ctx.translate(x + size / 2, y + size / 2);
         ctx.rotate((Math.PI / 180) * item.rotation);
-        ctx.translate(-item.size / 2, -item.size / 2);
-        ctx.drawImage(img, 0, 0, item.size, item.size);
+        ctx.translate(-size / 2, -size / 2);
+        ctx.drawImage(img, 0, 0, size, size);
         ctx.restore();
 
         const circuitText = (item.circuit || "").trim();
         if (circuitText) {
           ctx.save();
-          ctx.font = `${Math.max(10, Math.round(item.size * 0.45))}px system-ui,Segoe UI,Roboto,Arial,sans-serif`;
+          ctx.font = `${Math.max(10, Math.round(item.size * 0.45)) * HQ}px system-ui,Segoe UI,Roboto,Arial,sans-serif`;
           ctx.fillStyle = "#000000";
-          ctx.fillText(circuitText, item.x, item.y + item.size + 16);
+          ctx.fillText(circuitText, x, y + size + 16 * HQ);
           ctx.restore();
         }
       }
 
-      const link = document.createElement("a");
-      link.download = `${(state.projectName || "sicherheitsplan")}_seite_${state.pageNum}.png`;
-      link.href = exportCanvas.toDataURL("image/png");
-      link.click();
+      // Canvas -> PDF (1 Seite, exakt gleiche Größe)
+      const { jsPDF } = window.jspdf || {};
+      if (!jsPDF) {
+        alert("jsPDF konnte nicht geladen werden (Internet/Script prüfen).");
+        return;
+      }
+
+      const pxW = exportCanvas.width;
+      const pxH = exportCanvas.height;
+
+      // px -> pt (72pt pro inch; Browser meist 96dpi)
+      const ptW = pxW * 72 / 96;
+      const ptH = pxH * 72 / 96;
+
+      const orientation = ptW >= ptH ? "landscape" : "portrait";
+      const pdf = new jsPDF({ orientation, unit: "pt", format: [ptW, ptH] });
+
+      // JPEG spart Größe, bleibt bei HQ trotzdem scharf (Qualität 0.92)
+      const imgData = exportCanvas.toDataURL("image/jpeg", 0.92);
+      pdf.addImage(imgData, "JPEG", 0, 0, ptW, ptH);
+
+      const filename = `${(state.projectName || "sicherheitsplan")}_seite_${state.pageNum}_HQ${HQ}x.pdf`;
+      pdf.save(filename);
     }
 
     // ===== Projekt speichern/laden (.json) =====
@@ -999,7 +1018,6 @@
         saveState();
         return;
       }
-
       projectStatus.textContent = "Unbekannter Dateityp. Bitte PDF oder Bild wählen.";
     });
 
@@ -1037,7 +1055,7 @@
       saveState();
     });
 
-    btnExport.addEventListener("click", exportPNG);
+    btnExport.addEventListener("click", exportPDF);
 
     btnDelete.addEventListener("click", () => {
       if (state.selectedIds.length === 0) return;
@@ -1057,12 +1075,10 @@
 
     btnClearSelection.addEventListener("click", () => clearSelection());
 
-    // Klick auf freien Bereich: wenn Tool aktiv -> platzieren, sonst Auswahl leeren
     overlay.addEventListener("click", (event) => {
       if (state.activeSymbol) {
         placeSymbolAt(event.clientX, event.clientY);
       } else {
-        // nur wenn nicht shift (damit man shift klicken kann ohne alles zu verlieren)
         if (!event.shiftKey) clearSelection();
       }
     });
@@ -1096,6 +1112,8 @@
       saveState();
       renderOverlay();
     });
+
+    pdfQuality.addEventListener("change", saveState);
 
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
